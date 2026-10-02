@@ -97,25 +97,27 @@ struct CatalogLookupSheet: View {
 struct SettingsView: View {
     var body: some View {
         Form {
+            #if !APP_STORE
             Section("Helpers") {
                 LabeledContent("ffmpeg") {
-                    Text(HelperBinary.ffmpeg.optionalURL()?.path ?? "Not found")
+                    Text(HelperBinary.ffmpeg.optionalURL()?.path ?? "Not in Contents/Helpers")
                         .textSelection(.enabled)
                 }
                 LabeledContent("ffprobe") {
-                    Text(HelperBinary.ffprobe.optionalURL()?.path ?? "Not found")
+                    Text(HelperBinary.ffprobe.optionalURL()?.path ?? "Not in Contents/Helpers")
                         .textSelection(.enabled)
                 }
                 LabeledContent("cdparanoia") {
-                    Text(HelperBinary.cdparanoia.optionalURL()?.path ?? "Not found")
+                    Text(HelperBinary.cdparanoia.optionalURL()?.path ?? "Not in Contents/Helpers")
                         .textSelection(.enabled)
                 }
-                Text("Place universal binaries in Contents/Helpers or install with Homebrew. See README.")
-                    .font(.caption)
+                Text("Optional. Put a static binary in Contents/Helpers for loudness normalize, silence trimming, and CD ripping. Export does not need Homebrew.")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
+            #endif
             Section("Privacy") {
-                Text("Audio never leaves this Mac. Optional internet is used only for disc/book lookup and cover art.")
+                Text("Optional cover and metadata lookup uses MusicBrainz, the Cover Art Archive, Open Library, and Google Books. If lookup fails, export continues offline. Audio never leaves this Mac.")
                     .font(.callout)
             }
         }

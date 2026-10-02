@@ -1,6 +1,6 @@
 import Foundation
 
-enum OutputPreset: String, Codable, CaseIterable, Identifiable, Sendable {
+nonisolated enum OutputPreset: String, Codable, CaseIterable, Identifiable, Sendable {
     case spokenWord
     case spokenStereo
     case keepSource

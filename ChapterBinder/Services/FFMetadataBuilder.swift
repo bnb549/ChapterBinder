@@ -1,6 +1,6 @@
 import Foundation
 
-enum FFMetadataBuilder {
+nonisolated enum FFMetadataBuilder {
     static func build(project: BookProject, includeGlobalTags: Bool = true) -> String {
         var lines: [String] = [";FFMETADATA1"]
         if includeGlobalTags {

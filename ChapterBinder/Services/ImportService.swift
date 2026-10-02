@@ -34,7 +34,26 @@ enum ImportService {
         return NaturalSort.sorted(files) { $0.path }
     }
 
+    nonisolated static func rejectDRM(in urls: [URL]) throws {
+        let fm = FileManager.default
+        func fail(_ url: URL) -> Error {
+            AppError.importFailed(
+                "“\(url.lastPathComponent)” is an Audible file. ChapterBinder does not unlock DRM. Import a DRM-free AAC, MP3, WAV, FLAC, or M4B instead."
+            )
+        }
+        for url in urls {
+            if AudioFileType.isAudibleDRM(url) { throw fail(url) }
+            var isDir: ObjCBool = false
+            guard fm.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else { continue }
+            guard let enumerator = fm.enumerator(at: url, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) else { continue }
+            for case let file as URL in enumerator where AudioFileType.isAudibleDRM(file) {
+                throw fail(file)
+            }
+        }
+    }
+
     static func makePlan(from urls: [URL]) async throws -> ImportPlan {
+        try rejectDRM(in: urls)
         let files = collectAudioFiles(from: urls)
         guard !files.isEmpty else {
             throw AppError.importFailed("No audio files found. Drop MP3, M4A, M4B, AAC, WAV, AIFF, FLAC, or CAF.")
@@ -48,11 +67,12 @@ enum ImportService {
         var embeddedChapters: [EmbeddedChapter] = []
 
         for (index, file) in files.enumerated() {
+            let started = file.startAccessingSecurityScopedResource()
+            defer { if started { file.stopAccessingSecurityScopedResource() } }
             let probe = try await ProbeService.probe(url: file)
             let disc = DiscFolder.discIndex(in: file.path) ?? 1
             let title = probe.title?.isEmpty == false ? probe.title! : file.deletingPathExtension().lastPathComponent
-            var bookmark: Data?
-            bookmark = try? file.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil)
+            let bookmark = SecurityScope.bookmark(for: file)
 
             let track = SourceTrack(
                 path: file.path,

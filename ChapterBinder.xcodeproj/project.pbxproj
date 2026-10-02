@@ -8,29 +8,64 @@
 
 /* Begin PBXFileReference section */
 		DA8D0DFB3052F3E000B22504 /* ChapterBinder.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ChapterBinder.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DA8D0F013052F3E000B22504 /* ChapterBinder-MAS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ChapterBinder-MAS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		DA8D0F113052F3E000B22504 /* ChapterBinderTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ChapterBinderTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		DA8D0E303052F3E000B22504 /* Exceptions for "ChapterBinder" folder in "ChapterBinder" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				ChapterBinder.entitlements,
+				ChapterBinder-MAS.entitlements,
+			);
+			target = DA8D0DFA3052F3E000B22504 /* ChapterBinder */;
+		};
+		DA8D0F063052F3E000B22504 /* Exceptions for "ChapterBinder" folder in "ChapterBinder-MAS" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				ChapterBinder.entitlements,
+				ChapterBinder-MAS.entitlements,
+			);
+			target = DA8D0F023052F3E000B22504 /* ChapterBinder-MAS */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		DA8D0DFD3052F3E000B22504 /* ChapterBinder */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				DA8D0E303052F3E000B22504 /* Exceptions for "ChapterBinder" folder in "ChapterBinder" target */,
+				DA8D0F063052F3E000B22504 /* Exceptions for "ChapterBinder" folder in "ChapterBinder-MAS" target */,
 			);
 			path = ChapterBinder;
 			sourceTree = "<group>";
 		};
-		DA8D0E303052F3E000B22504 /* Exceptions for "ChapterBinder" folder in "ChapterBinder" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-				ChapterBinder.entitlements,
-			);
-			target = DA8D0DFA3052F3E000B22504 /* ChapterBinder */;
+		DA8D0F163052F3E000B22504 /* ChapterBinderTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ChapterBinderTests;
+			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		DA8D0DF83052F3E000B22504 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DA8D0F043052F3E000B22504 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DA8D0F143052F3E000B22504 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -44,6 +79,7 @@
 			isa = PBXGroup;
 			children = (
 				DA8D0DFD3052F3E000B22504 /* ChapterBinder */,
+				DA8D0F163052F3E000B22504 /* ChapterBinderTests */,
 				DA8D0DFC3052F3E000B22504 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -52,6 +88,8 @@
 			isa = PBXGroup;
 			children = (
 				DA8D0DFB3052F3E000B22504 /* ChapterBinder.app */,
+				DA8D0F013052F3E000B22504 /* ChapterBinder-MAS.app */,
+				DA8D0F113052F3E000B22504 /* ChapterBinderTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -82,7 +120,70 @@
 			productReference = DA8D0DFB3052F3E000B22504 /* ChapterBinder.app */;
 			productType = "com.apple.product-type.application";
 		};
+		DA8D0F023052F3E000B22504 /* ChapterBinder-MAS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DA8D0F093052F3E000B22504 /* Build configuration list for PBXNativeTarget "ChapterBinder-MAS" */;
+			buildPhases = (
+				DA8D0F033052F3E000B22504 /* Sources */,
+				DA8D0F043052F3E000B22504 /* Frameworks */,
+				DA8D0F053052F3E000B22504 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				DA8D0DFD3052F3E000B22504 /* ChapterBinder */,
+			);
+			name = "ChapterBinder-MAS";
+			packageProductDependencies = (
+			);
+			productName = "ChapterBinder-MAS";
+			productReference = DA8D0F013052F3E000B22504 /* ChapterBinder-MAS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		DA8D0F123052F3E000B22504 /* ChapterBinderTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DA8D0F193052F3E000B22504 /* Build configuration list for PBXNativeTarget "ChapterBinderTests" */;
+			buildPhases = (
+				DA8D0F133052F3E000B22504 /* Sources */,
+				DA8D0F143052F3E000B22504 /* Frameworks */,
+				DA8D0F153052F3E000B22504 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				DA8D0F1A3052F3E000B22504 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				DA8D0F163052F3E000B22504 /* ChapterBinderTests */,
+			);
+			name = ChapterBinderTests;
+			packageProductDependencies = (
+			);
+			productName = ChapterBinderTests;
+			productReference = DA8D0F113052F3E000B22504 /* ChapterBinderTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
+
+/* Begin PBXContainerItemProxy section */
+		DA8D0F1B3052F3E000B22504 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DA8D0DF33052F3E000B22504 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DA8D0DFA3052F3E000B22504;
+			remoteInfo = ChapterBinder;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		DA8D0F1A3052F3E000B22504 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DA8D0DFA3052F3E000B22504 /* ChapterBinder */;
+			targetProxy = DA8D0F1B3052F3E000B22504 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXProject section */
 		DA8D0DF33052F3E000B22504 /* Project object */ = {
@@ -94,6 +195,13 @@
 				TargetAttributes = {
 					DA8D0DFA3052F3E000B22504 = {
 						CreatedOnToolsVersion = 26.6;
+					};
+					DA8D0F023052F3E000B22504 = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					DA8D0F123052F3E000B22504 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = DA8D0DFA3052F3E000B22504;
 					};
 				};
 			};
@@ -112,12 +220,28 @@
 			projectRoot = "";
 			targets = (
 				DA8D0DFA3052F3E000B22504 /* ChapterBinder */,
+				DA8D0F023052F3E000B22504 /* ChapterBinder-MAS */,
+				DA8D0F123052F3E000B22504 /* ChapterBinderTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		DA8D0DF93052F3E000B22504 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DA8D0F053052F3E000B22504 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DA8D0F153052F3E000B22504 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -151,6 +275,20 @@
 
 /* Begin PBXSourcesBuildPhase section */
 		DA8D0DF73052F3E000B22504 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DA8D0F033052F3E000B22504 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DA8D0F133052F3E000B22504 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -288,7 +426,7 @@
 				CODE_SIGN_ENTITLEMENTS = ChapterBinder/ChapterBinder.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = K3HHM2VAUC;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -304,7 +442,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.benmonroe.ChapterBinder;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -325,7 +463,7 @@
 				CODE_SIGN_ENTITLEMENTS = ChapterBinder/ChapterBinder.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = K3HHM2VAUC;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -341,7 +479,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.benmonroe.ChapterBinder;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -351,6 +489,122 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		DA8D0F073052F3E000B22504 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = ChapterBinder/ChapterBinder-MAS.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = K3HHM2VAUC;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ChapterBinder/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ChapterBinder;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Benjamin Monroe";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.benmonroe.ChapterBinder.mas;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "APP_STORE DEBUG $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		DA8D0F083052F3E000B22504 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = ChapterBinder/ChapterBinder-MAS.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = K3HHM2VAUC;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ChapterBinder/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ChapterBinder;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Benjamin Monroe";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.benmonroe.ChapterBinder.mas;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "APP_STORE $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		DA8D0F173052F3E000B22504 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = K3HHM2VAUC;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.benmonroe.ChapterBinderTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ChapterBinder.app/Contents/MacOS/ChapterBinder";
+			};
+			name = Debug;
+		};
+		DA8D0F183052F3E000B22504 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = K3HHM2VAUC;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.benmonroe.ChapterBinderTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ChapterBinder.app/Contents/MacOS/ChapterBinder";
 			};
 			name = Release;
 		};
@@ -371,6 +625,24 @@
 			buildConfigurations = (
 				DA8D0E073052F3E200B22504 /* Debug */,
 				DA8D0E083052F3E200B22504 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DA8D0F093052F3E000B22504 /* Build configuration list for PBXNativeTarget "ChapterBinder-MAS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DA8D0F073052F3E000B22504 /* Debug */,
+				DA8D0F083052F3E000B22504 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DA8D0F193052F3E000B22504 /* Build configuration list for PBXNativeTarget "ChapterBinderTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DA8D0F173052F3E000B22504 /* Debug */,
+				DA8D0F183052F3E000B22504 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

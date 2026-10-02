@@ -1,3 +1,4 @@
+#if !APP_STORE
 import Foundation
 
 protocol CDRipServicing: Sendable {
@@ -199,3 +200,4 @@ enum CDRipperFactory {
         return ParanoiaCDRipper()
     }
 }
+#endif

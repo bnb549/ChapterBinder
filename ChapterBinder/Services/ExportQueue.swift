@@ -83,7 +83,7 @@ final class ExportQueue {
         }
         let destination = URL(fileURLWithPath: outputPath)
         do {
-            let urls = try await FFmpegExportService.export(project: snapshot, destination: destination) { progress in
+            let report = try await ExportService.export(project: snapshot, destination: destination) { progress in
                 Task { @MainActor in
                     job.progress = progress.fraction
                     job.message = progress.message
@@ -94,10 +94,10 @@ final class ExportQueue {
                 job.message = "Cancelled"
                 return
             }
-            job.outputURLs = urls
+            job.outputURLs = report.urls
             job.progress = 1
             job.state = .succeeded
-            job.message = "Finished"
+            job.message = report.message
             ProjectLookup.clearCacheOnSuccess?(snapshot.id)
         } catch is CancellationError {
             job.state = .cancelled

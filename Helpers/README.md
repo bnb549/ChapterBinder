@@ -1,20 +1,21 @@
-# Bundled helpers
+# Optional helpers
 
-Drop **universal** (arm64 + x86_64) binaries here. The Xcode build copies them to `ChapterBinder.app/Contents/Helpers`.
+Drop **static universal** (arm64 + x86_64) binaries here. The Developer ID target’s Run Script copies them to `ChapterBinder.app/Contents/Helpers`.
 
-| Binary | Purpose |
+| Binary | Used for |
 | --- | --- |
-| `ffmpeg` | Encode, concat, mux M4B, chapters, cover, tags |
-| `ffprobe` | Probe duration/codec/tags/chapters and **verify** exports |
-| `cdparanoia` or `cd-paranoia` | Jitter-corrected CD rips to WAV |
+| `ffmpeg` | Loudness normalize, silence trimming, and encode when AVFoundation cannot |
+| `ffprobe` | Diagnostic chapter count only. It does not decide export success |
+| `cdparanoia` or `cd-paranoia` | CD ripping on the direct-download build |
 
-Do **not** ship Homebrew’s cellar-linked `ffmpeg`. Use a static macOS build (evermeet, ffmpeg.org, or a local static compile).
+The Mac App Store target does not run this script and does not rip CDs.
+
+Export of AAC, MP3, WAV, and FLAC does not need these binaries. Homebrew is not searched at build time or at runtime.
 
 ```bash
-# example
 cp /path/to/static/ffmpeg ./ffmpeg
 cp /path/to/static/ffprobe ./ffprobe
 chmod +x ffmpeg ffprobe
 ```
 
-Runtime search order: `Contents/Helpers` → Homebrew → `/usr/local/bin` → `PATH`.
+Do **not** ship Homebrew’s cellar-linked `ffmpeg`.

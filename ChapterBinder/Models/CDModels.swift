@@ -1,3 +1,4 @@
+#if !APP_STORE
 import Foundation
 
 enum RipQuality: String, Codable, CaseIterable, Identifiable, Sendable {
@@ -114,3 +115,4 @@ enum MockTOC {
         )
     }
 }
+#endif

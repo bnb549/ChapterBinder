@@ -1,100 +1,65 @@
 import Foundation
 
-struct ExportProgress: Sendable {
+nonisolated struct ExportProgress: Sendable {
     var fraction: Double
     var message: String
 }
 
-enum FFmpegExportService {
-    static func export(
+nonisolated enum FFmpegExportService {
+    /// Developer ID fallback. The file is stamped after ffmpeg closes it.
+    static func exportVolume(
         project: BookProject,
         destination: URL,
+        workingDirectory: URL,
+        cover: Data?,
         onProgress: @escaping @Sendable (ExportProgress) -> Void
-    ) async throws -> [URL] {
+    ) async throws -> ChapterlineReport {
         try Task.checkCancellation()
         let ffmpeg = try HelperBinary.ffmpeg.url()
-        _ = try HelperBinary.ffprobe.url()
-
-        guard !project.tracks.isEmpty else {
-            throw AppError.exportFailed("This book has no source tracks.")
-        }
-        for track in project.tracks {
-            if !FileManager.default.fileExists(atPath: track.path) {
-                throw AppError.fileMissing(track.path)
+        let fm = FileManager.default
+        let temp = workingDirectory
+        var discard = false
+        defer {
+            if discard || Task.isCancelled {
+                try? fm.removeItem(at: temp)
             }
         }
 
-        try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-
-        let volumes = planVolumes(project)
-        var outputs: [URL] = []
-        for (index, volume) in volumes.enumerated() {
-            try Task.checkCancellation()
-            let url = volumeURL(base: destination, index: index, count: volumes.count, project: project)
-            onProgress(ExportProgress(
-                fraction: Double(index) / Double(max(volumes.count, 1)),
-                message: volumes.count > 1 ? "Volume \(index + 1) of \(volumes.count)" : "Exporting"
-            ))
-            try await exportVolume(
-                project: volume,
-                destination: url,
-                ffmpeg: ffmpeg,
-                overall: { p in
-                    let base = Double(index) / Double(volumes.count)
-                    let span = 1.0 / Double(volumes.count)
-                    onProgress(ExportProgress(fraction: base + p.fraction * span, message: p.message))
-                }
-            )
-            outputs.append(url)
-        }
-        return outputs
-    }
-
-    private static func exportVolume(
-        project: BookProject,
-        destination: URL,
-        ffmpeg: URL,
-        overall: @escaping @Sendable (ExportProgress) -> Void
-    ) async throws {
-        let fm = FileManager.default
-        let temp = tempDirectory(near: destination)
-        try fm.createDirectory(at: temp, withIntermediateDirectories: true)
-        defer {
-            try? fm.removeItem(at: temp)
-        }
-
         let settings = project.encodeSettings
-        let canRemux = canRemuxCopy(project: project, settings: settings)
+        let slices = ExportPlanner.slices(for: project)
+        let files = slices.compactMap { project.track(id: $0.trackID)?.url }
+        let canRemux = ExportPlanner.canStreamCopy(project: project, settings: settings)
         let audioURL: URL
 
-        if canRemux && project.tracks.count == 1 {
-            overall(ExportProgress(fraction: 0.2, message: "Remuxing (no re-encode)"))
-            audioURL = project.tracks[0].url
+        if canRemux && files.count == 1 {
+            onProgress(ExportProgress(fraction: 0.2, message: "Remuxing (no re-encode)"))
+            audioURL = files[0]
         } else if canRemux {
-            overall(ExportProgress(fraction: 0.15, message: "Concatenating AAC (stream copy)"))
+            onProgress(ExportProgress(fraction: 0.15, message: "Concatenating AAC (stream copy)"))
             audioURL = try await concat(
-                files: project.tracks.map(\.url),
+                files: files,
                 ffmpeg: ffmpeg,
                 temp: temp,
                 copy: true,
-                overall: overall
+                overall: onProgress
             )
         } else {
-            let encoded = try await encodeAll(
+            let encoded = try await encodeSlices(
+                slices: slices,
                 project: project,
                 ffmpeg: ffmpeg,
                 temp: temp,
                 settings: settings,
-                overall: overall
+                overall: onProgress
             )
-            overall(ExportProgress(fraction: 0.72, message: "Joining encoded tracks"))
+            onProgress(ExportProgress(fraction: 0.72, message: "Joining encoded tracks"))
             audioURL = try await concat(
                 files: encoded,
                 ffmpeg: ffmpeg,
                 temp: temp,
                 copy: true,
                 overall: { p in
-                    overall(ExportProgress(fraction: 0.72 + p.fraction * 0.1, message: p.message))
+                    onProgress(ExportProgress(fraction: 0.72 + p.fraction * 0.1, message: p.message))
                 }
             )
         }
@@ -105,93 +70,56 @@ enum FFmpegExportService {
             .write(to: metaURL, options: .atomic)
 
         var coverURL: URL?
-        if let path = project.coverPath, fm.fileExists(atPath: path) {
-            coverURL = URL(fileURLWithPath: path)
+        if let cover, !cover.isEmpty {
+            let file = temp.appendingPathComponent("cover.jpg")
+            try cover.write(to: file, options: .atomic)
+            coverURL = file
         }
 
-        overall(ExportProgress(fraction: 0.86, message: "Writing chaptered \(project.outputContainer.label)"))
+        onProgress(ExportProgress(fraction: 0.86, message: "Muxing audio"))
+        let muxed = temp.appendingPathComponent("muxed.m4a")
         try await mux(
             audio: audioURL,
             metadata: metaURL,
             cover: coverURL,
-            destination: destination,
+            destination: muxed,
             ffmpeg: ffmpeg,
             project: project
         )
 
-        overall(ExportProgress(fraction: 0.95, message: "Verifying chapters"))
-        try await verify(output: destination, project: project)
-        overall(ExportProgress(fraction: 1, message: "Done"))
+        let marks = try ChapterTimeline.marks(for: project)
+        onProgress(ExportProgress(fraction: 0.92, message: "Writing moov/udta/chpl and tref/chap"))
+        try M4BChapterStamper.stamp(
+            source: muxed,
+            destination: destination,
+            chapters: marks,
+            tags: StampTags(
+                title: project.displayTitle,
+                artist: project.author,
+                album: project.displayTitle,
+                cover: cover
+            )
+        )
+        onProgress(ExportProgress(fraction: 0.97, message: "Checking moov/udta/chpl and tref/chap"))
+        let report: ChapterlineReport
+        do {
+            report = try await ChapterlineVerifier.verify(
+                url: destination,
+                marks: marks,
+                expectedDuration: marks.last?.end ?? project.totalDuration,
+                hadCover: cover != nil
+            )
+        } catch {
+            try? fm.removeItem(at: destination)
+            throw error
+        }
+        discard = true
+        onProgress(ExportProgress(fraction: 1, message: report.line))
+        return report
     }
 
     static func canRemuxCopy(project: BookProject, settings: EncodeSettings) -> Bool {
-        if project.loudnessNormalize || project.stripSilence { return false }
-        guard project.tracks.allSatisfy(\.isAAC) else { return false }
-        if settings.keepSource { return true }
-        return project.tracks.allSatisfy { track in
-            (settings.channels == 0 || track.channels == settings.channels)
-                && (settings.sampleRate == 0 || track.sampleRate == settings.sampleRate)
-        }
-    }
-
-    private static func encodeAll(
-        project: BookProject,
-        ffmpeg: URL,
-        temp: URL,
-        settings: EncodeSettings,
-        overall: @escaping @Sendable (ExportProgress) -> Void
-    ) async throws -> [URL] {
-        let encodedDir = temp.appendingPathComponent("encoded", isDirectory: true)
-        try FileManager.default.createDirectory(at: encodedDir, withIntermediateDirectories: true)
-
-        let filters = audioFilters(project: project)
-        var outputs = Array(repeating: URL(fileURLWithPath: "/dev/null"), count: project.tracks.count)
-        let total = max(project.tracks.count, 1)
-
-        try await withThrowingTaskGroup(of: (Int, URL).self) { group in
-            var inFlight = 0
-            var next = 0
-            let limit = 4
-
-            func enqueue(_ index: Int) {
-                let track = project.tracks[index]
-                let out = encodedDir.appendingPathComponent(String(format: "%04d.m4a", index))
-                group.addTask {
-                    try await encodeOne(
-                        ffmpeg: ffmpeg,
-                        input: track.url,
-                        output: out,
-                        settings: settings,
-                        filters: filters,
-                        duration: track.duration
-                    )
-                    return (index, out)
-                }
-            }
-
-            while next < project.tracks.count && inFlight < limit {
-                enqueue(next)
-                next += 1
-                inFlight += 1
-            }
-
-            var finished = 0
-            for try await (index, url) in group {
-                outputs[index] = url
-                finished += 1
-                inFlight -= 1
-                overall(ExportProgress(
-                    fraction: 0.05 + (Double(finished) / Double(total)) * 0.65,
-                    message: "Encoding track \(finished) of \(total)"
-                ))
-                if next < project.tracks.count {
-                    enqueue(next)
-                    next += 1
-                    inFlight += 1
-                }
-            }
-        }
-        return outputs
+        ExportPlanner.canStreamCopy(project: project, settings: settings)
     }
 
     private static func encodeOne(
@@ -200,16 +128,20 @@ enum FFmpegExportService {
         output: URL,
         settings: EncodeSettings,
         filters: String?,
+        start: TimeInterval,
         duration: TimeInterval
     ) async throws {
+        let bitrate = settings.bitrateKbps > 0 ? settings.bitrateKbps : 64
         var args = [
             "-y", "-hide_banner", "-nostats",
             "-progress", "pipe:1",
+            "-ss", String(format: "%.3f", max(0, start)),
             "-i", input.path,
+            "-t", String(format: "%.3f", duration),
             "-vn",
             "-c:a", "aac",
             "-profile:a", "aac_low",
-            "-b:a", "\(max(24, settings.bitrateKbps))k",
+            "-b:a", "\(max(24, bitrate))k",
         ]
         if settings.channels > 0 {
             args += ["-ac", "\(settings.channels)"]
@@ -226,7 +158,6 @@ enum FFmpegExportService {
         if result.exitCode != 0 {
             throw AppError.exportFailed(result.stderr.suffix(800).description)
         }
-        _ = duration
     }
 
     private static func audioFilters(project: BookProject) -> String? {
@@ -303,7 +234,7 @@ enum FFmpegExportService {
             "-c:a", "copy",
             "-f", "mp4",
             "-brand", "M4B",
-            "-movflags", "+faststart+use_metadata_tags",
+            "-movflags", "+faststart",
             "-metadata", "media_type=2",
             "-metadata", "title=\(project.displayTitle)",
             "-metadata", "artist=\(project.author)",
@@ -336,78 +267,38 @@ enum FFmpegExportService {
         }
     }
 
-    static func verify(output: URL, project: BookProject) async throws {
-        let probe = try await ProbeService.probeWithFFProbe(url: output)
-        if probe.chapters.count != project.chapters.count {
-            throw AppError.verificationFailed(
-                "Expected \(project.chapters.count) chapters, ffprobe found \(probe.chapters.count). Apple Books will not show a chapter list."
+    private static func encodeSlices(
+        slices: [AudioSlice],
+        project: BookProject,
+        ffmpeg: URL,
+        temp: URL,
+        settings: EncodeSettings,
+        overall: @escaping @Sendable (ExportProgress) -> Void
+    ) async throws -> [URL] {
+        let encodedDir = temp.appendingPathComponent("encoded", isDirectory: true)
+        try FileManager.default.createDirectory(at: encodedDir, withIntermediateDirectories: true)
+        let filters = audioFilters(project: project)
+        var outputs: [URL] = []
+        let total = max(slices.count, 1)
+        for (index, slice) in slices.enumerated() {
+            try Task.checkCancellation()
+            guard let track = project.track(id: slice.trackID) else { continue }
+            let out = encodedDir.appendingPathComponent(String(format: "%04d.m4a", index))
+            try await encodeOne(
+                ffmpeg: ffmpeg,
+                input: track.url,
+                output: out,
+                settings: settings,
+                filters: filters,
+                start: slice.start,
+                duration: max(0.05, slice.end - slice.start)
             )
+            outputs.append(out)
+            overall(ExportProgress(
+                fraction: 0.05 + (Double(index + 1) / Double(total)) * 0.65,
+                message: "Encoding track \(index + 1) of \(total)"
+            ))
         }
-        if probe.duration + 1 < project.totalDuration * 0.95 {
-            throw AppError.verificationFailed(
-                "Output duration \(TimeFormatting.clock(probe.duration)) is shorter than source \(TimeFormatting.clock(project.totalDuration))."
-            )
-        }
-        if project.coverPath != nil && !probe.hasCover {
-            throw AppError.verificationFailed("Cover art was not embedded.")
-        }
-    }
-
-    private static func planVolumes(_ project: BookProject) -> [BookProject] {
-        let maxBytes = project.splitMaxBytes ?? 0
-        let maxSeconds = (project.splitMaxHours ?? 0) * 3600
-        if maxBytes <= 0 && maxSeconds <= 0 { return [project] }
-        if project.chapters.isEmpty { return [project] }
-
-        let bitrate = max(project.encodeSettings.bitrateKbps, 64)
-        func estimatedBytes(_ duration: TimeInterval) -> Int64 {
-            Int64(duration * Double(bitrate) * 1000 / 8)
-        }
-
-        var volumes: [BookProject] = []
-        var current = project
-        current.chapters = []
-        var accTime: TimeInterval = 0
-        var accBytes: Int64 = 0
-
-        func flush() {
-            guard !current.chapters.isEmpty else { return }
-            var copy = current
-            let part = volumes.count + 1
-            copy.title = "\(project.displayTitle) – Part \(part)"
-            copy.recomputeTimeline()
-            volumes.append(copy)
-            current.chapters = []
-            accTime = 0
-            accBytes = 0
-        }
-
-        for chapter in project.chapters {
-            let nextTime = accTime + chapter.duration
-            let nextBytes = accBytes + estimatedBytes(chapter.duration)
-            let overTime = maxSeconds > 0 && accTime > 0 && nextTime > maxSeconds
-            let overBytes = maxBytes > 0 && accBytes > 0 && nextBytes > maxBytes
-            if overTime || overBytes {
-                flush()
-            }
-            current.chapters.append(chapter)
-            accTime += chapter.duration
-            accBytes += estimatedBytes(chapter.duration)
-        }
-        flush()
-        return volumes.isEmpty ? [project] : volumes
-    }
-
-    private static func volumeURL(base: URL, index: Int, count: Int, project: BookProject) -> URL {
-        if count <= 1 { return base }
-        let name = base.deletingPathExtension().lastPathComponent
-        let ext = base.pathExtension
-        return base.deletingLastPathComponent()
-            .appendingPathComponent("\(name) - Part \(index + 1).\(ext)")
-    }
-
-    private static func tempDirectory(near destination: URL) -> URL {
-        destination.deletingLastPathComponent()
-            .appendingPathComponent(".__chapterbinder_\(UUID().uuidString)", isDirectory: true)
+        return outputs
     }
 }

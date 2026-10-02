@@ -14,25 +14,35 @@ final class AppModel {
     var selectedProjectID: BookProject.ID?
     var selection: Set<OutlineRowID> = []
     var editingChapterID: Chapter.ID?
+    #if !APP_STORE
     var cdIgnored = false
     var ripQuality: RipQuality = .paranoiaFull
-    var statusMessage: String = "Drop a folder, open an M4B, or rip a CD."
-    var errorMessage: String?
-    var isImporting = false
     var isRipping = false
     var ripProgress: RipProgress?
+    var pendingDiscNumber: Int = 2
+    #endif
+    #if APP_STORE
+    var statusMessage: String = "Drop a folder or open an M4B."
+    #else
+    var statusMessage: String = "Drop a folder, open an M4B, or rip a CD."
+    #endif
+    var errorMessage: String?
+    var isImporting = false
+    var relinkPaths: [String] = []
     var catalogHits: [CatalogHit] = []
     var isLookingUp = false
     var silenceBreaks: [SilenceBreak] = []
     var showRegexSheet = false
     var showLookupSheet = false
     var showChapterImportSheet = false
-    var pendingDiscNumber: Int = 2
 
     let store = ProjectStore()
     let queue = ExportQueue()
     let player = AudiobookPlayer()
+    #if !APP_STORE
     let driveWatcher = OpticalDriveWatcher()
+    #endif
+    private var fileLeases: [SecurityScope.Lease] = []
 
     var selectedProject: BookProject? {
         projects.first { $0.id == selectedProjectID }
@@ -48,7 +58,10 @@ final class AppModel {
         if let project = selectedProject {
             player.load(project)
         }
+        #if !APP_STORE
         driveWatcher.start()
+        #endif
+        refreshFileAccess()
         ProjectLookup.current = { [weak self] id in
             self?.projects.first { $0.id == id }
         }
@@ -150,6 +163,7 @@ final class AppModel {
                 player.load(project)
             }
             statusMessage = "Imported \(plan.tracks.count) track\(plan.tracks.count == 1 ? "" : "s")."
+            refreshFileAccess()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -157,11 +171,13 @@ final class AppModel {
 
     func deleteSelectedProject() {
         guard let id = selectedProjectID else { return }
+        stopFileAccess()
         try? store.delete(id)
         projects.removeAll { $0.id == id }
         selectedProjectID = projects.first?.id
         player.unload()
         if let project = selectedProject { player.load(project) }
+        refreshFileAccess()
     }
 
     func mergeSelection() {
@@ -267,7 +283,11 @@ final class AppModel {
         let dest = store.coverURL(for: projects[index].id)
         do {
             try CoverService.process(image, destination: dest)
-            mutate { $0.coverPath = dest.path }
+            let bookmark = SecurityScope.bookmark(for: dest)
+            mutate {
+                $0.coverPath = dest.path
+                $0.coverBookmark = bookmark
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -279,7 +299,11 @@ final class AppModel {
             do {
                 let dest = store.coverURL(for: project.id)
                 try await CoverService.extractEmbeddedCover(from: track.url, destination: dest)
-                mutate { $0.coverPath = dest.path }
+                let bookmark = SecurityScope.bookmark(for: dest)
+                mutate {
+                    $0.coverPath = dest.path
+                    $0.coverBookmark = bookmark
+                }
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -293,10 +317,6 @@ final class AppModel {
             project = selectedProject ?? project
         }
         guard project.outputPath != nil else { return }
-        if !HelperBinary.ffmpegAvailable || !HelperBinary.ffprobeAvailable {
-            errorMessage = AppError.helperMissing("ffmpeg/ffprobe").localizedDescription
-            return
-        }
         queue.enqueue(project)
         statusMessage = "Queued “\(project.displayTitle)”."
     }
@@ -328,7 +348,11 @@ final class AppModel {
                 do {
                     let dest = store.coverURL(for: id)
                     try await CatalogLookup.downloadCover(from: cover, to: dest)
-                    mutate { $0.coverPath = dest.path }
+                    let bookmark = SecurityScope.bookmark(for: dest)
+                    mutate {
+                        $0.coverPath = dest.path
+                        $0.coverBookmark = bookmark
+                    }
                 } catch {
                     errorMessage = error.localizedDescription
                 }
@@ -376,6 +400,7 @@ final class AppModel {
         player.seek(to: snapped)
     }
 
+    #if !APP_STORE
     func newFromCD() {
         cdIgnored = false
         if driveWatcher.audioDisc == nil {
@@ -485,11 +510,13 @@ final class AppModel {
                 }
                 pendingDiscNumber = discIndex + 1
                 statusMessage = "Ripped disc \(discIndex) (\(imported.count) tracks). Insert the next disc and choose “This is disc \(pendingDiscNumber)”."
+                refreshFileAccess()
             } catch {
                 errorMessage = error.localizedDescription
             }
         }
     }
+    #endif
 
     func exportChapterList(_ format: ChapterListFormat) {
         guard let project = selectedProject else { return }
@@ -518,13 +545,62 @@ final class AppModel {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
-    func openInBooks(url: URL) {
-        let books = URL(fileURLWithPath: "/System/Applications/Books.app")
-        if FileManager.default.fileExists(atPath: books.path) {
-            NSWorkspace.shared.open([url], withApplicationAt: books, configuration: NSWorkspace.OpenConfiguration())
-        } else {
-            NSWorkspace.shared.open(url)
+    func openFinished(url: URL) {
+        NSWorkspace.shared.open(url)
+    }
+
+    func refreshFileAccess() {
+        stopFileAccess()
+        guard let project = selectedProject else {
+            relinkPaths = []
+            return
         }
+        var needs: [String] = []
+        for track in project.tracks {
+            do {
+                fileLeases.append(try SecurityScope.lease(bookmark: track.bookmark, path: track.path))
+            } catch {
+                needs.append(track.path)
+            }
+        }
+        if let cover = project.coverPath {
+            do {
+                fileLeases.append(try SecurityScope.lease(bookmark: project.coverBookmark, path: cover))
+            } catch {
+                needs.append(cover)
+            }
+        }
+        relinkPaths = needs
+    }
+
+    func relinkFirst() {
+        guard let path = relinkPaths.first else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.message = "Relink \(URL(fileURLWithPath: path).lastPathComponent)"
+        panel.prompt = "Relink"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let started = url.startAccessingSecurityScopedResource()
+        defer { if started { url.stopAccessingSecurityScopedResource() } }
+        let bookmark = SecurityScope.bookmark(for: url)
+        mutate { project in
+            for index in project.tracks.indices where project.tracks[index].path == path {
+                project.tracks[index].path = url.path
+                project.tracks[index].bookmark = bookmark
+            }
+            if project.coverPath == path {
+                project.coverPath = url.path
+                project.coverBookmark = bookmark
+            }
+        }
+        refreshFileAccess()
+    }
+
+    private func stopFileAccess() {
+        fileLeases.forEach { $0.stop() }
+        fileLeases.removeAll()
     }
 
     private func applySuggestions(_ plan: ImportPlan, to project: inout BookProject, overwrite: Bool) {
@@ -553,6 +629,7 @@ final class AppModel {
                     await MainActor.run {
                         if let index = self.projects.firstIndex(where: { $0.id == id }) {
                             self.projects[index].coverPath = dest.path
+                            self.projects[index].coverBookmark = SecurityScope.bookmark(for: dest)
                             self.persist(self.projects[index])
                         }
                     }
@@ -560,6 +637,7 @@ final class AppModel {
             } else {
                 try CoverService.processImage(at: url, destination: dest)
                 project.coverPath = dest.path
+                project.coverBookmark = SecurityScope.bookmark(for: dest)
             }
         } catch {
             errorMessage = error.localizedDescription

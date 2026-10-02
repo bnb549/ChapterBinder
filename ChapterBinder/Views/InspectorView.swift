@@ -103,15 +103,23 @@ struct InspectorView: View {
                                 .keyboardShortcut("e", modifiers: [.command])
                                 .disabled(book.tracks.isEmpty)
                         }
-                        if FFmpegExportService.canRemuxCopy(project: book, settings: book.encodeSettings) {
-                            Label("Will remux with stream copy — no AAC re-encode.", systemImage: "bolt.horizontal.circle")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        } else if !HelperBinary.ffmpegAvailable {
-                            Label("ffmpeg is not installed. Export needs Helpers/ffmpeg. See README.", systemImage: "exclamationmark.triangle")
-                                .font(.caption)
-                                .foregroundStyle(.orange)
+                        Group {
+                            if book.loudnessNormalize || book.stripSilence {
+                                #if APP_STORE
+                                Text("Loudness normalize and silence trimming are not in the App Store build. Turn them off to export. Audio stays on this Mac.")
+                                #else
+                                Text(HelperBinary.ffmpeg.optionalURL() == nil
+                                     ? "Loudness normalize and silence trimming need the optional ffmpeg helper in Contents/Helpers. Turn them off to export with the built-in encoder. Homebrew is not required."
+                                     : "Those filters use the optional ffmpeg helper. Chapters are still stamped on this Mac.")
+                                #endif
+                            } else if ExportPlanner.canStreamCopy(project: book, settings: book.encodeSettings) {
+                                Text("AAC will be copied. Chapters, cover, and tags are stamped without re-encoding.")
+                            } else {
+                                Text("Exports as AAC-LC at the preset bitrate on this Mac.")
+                            }
                         }
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                     }
                     .padding(4)
                 }
@@ -134,7 +142,7 @@ private struct LabeledField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
             TextField(title, text: text)
                 .textFieldStyle(.roundedBorder)

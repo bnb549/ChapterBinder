@@ -50,11 +50,13 @@ struct SidebarView: View {
 
             Divider()
             VStack(alignment: .leading, spacing: 6) {
+                #if !APP_STORE
                 Button {
                     model.newFromCD()
                 } label: {
                     Label("New from CD", systemImage: "opticaldisc")
                 }
+                #endif
                 Button {
                     model.newFromFiles()
                 } label: {
@@ -100,11 +102,18 @@ private struct QueueRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
+            if job.state == .succeeded {
+                Text(job.message)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Export result. \(job.message)")
+            }
             if job.state == .failed, let error = job.error {
                 Text(error)
                     .font(.caption2)
                     .foregroundStyle(.red)
-                    .lineLimit(2)
+                    .lineLimit(4)
+                    .accessibilityLabel("Export result. \(error)")
             }
             HStack {
                 if job.state == .running || job.state == .queued {
@@ -112,7 +121,7 @@ private struct QueueRow: View {
                 }
                 if let url = job.outputURLs.first {
                     Button("Reveal") { model.reveal(url: url) }
-                    Button("Books") { model.openInBooks(url: url) }
+                    Button("Open") { model.openFinished(url: url) }
                 }
             }
             .font(.caption)

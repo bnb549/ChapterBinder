@@ -133,6 +133,7 @@ struct ChapterTableView: View {
                 } else {
                     Text(chapter.title)
                         .fontWeight(.medium)
+                        .accessibilityLabel("\(chapter.title), starts at \(TimeFormatting.clock(chapter.start))")
                         .onTapGesture(count: 2) {
                             model.editingChapterID = chapterID
                         }

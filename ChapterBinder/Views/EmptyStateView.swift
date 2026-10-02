@@ -13,13 +13,14 @@ struct EmptyStateView: View {
             VStack(spacing: 8) {
                 Text("ChapterBinder")
                     .font(.largeTitle.weight(.semibold))
-                Text("Turn audiobook CDs and ripped tracks into a single chaptered M4B.")
+                Text("Turn audio files into a single chaptered M4B.")
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 420)
             }
 
             HStack(alignment: .top, spacing: 16) {
+                #if !APP_STORE
                 PathCard(
                     icon: "opticaldisc",
                     title: "Rip a CD",
@@ -27,6 +28,7 @@ struct EmptyStateView: View {
                 ) {
                     model.newFromCD()
                 }
+                #endif
                 PathCard(
                     icon: "folder.fill.badge.plus",
                     title: "Drop a folder",

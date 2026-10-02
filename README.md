@@ -1,46 +1,62 @@
 # ChapterBinder
 
-A local, offline-first macOS app that turns audiobook CDs and already-ripped audio into a single **chaptered `.m4b`** that works in Apple Books, CarPlay, iPhone, Audiobookshelf, Plex, and VLC.
+A local macOS app that turns already-ripped audio into a single **chaptered `.m4b`** that opens in Chapterline and Apple Books. Marketing version **1.1.0** (build 2). See `VERSION.md`.
 
-Audio never leaves this Mac. Optional internet is used only for disc/book lookup and cover art.
+Audio never leaves this Mac. Optional internet is used only for book lookup and cover art. Lookup failure does not fail an export.
 
 ## What it does
 
-- **Rip** an audio CD (USB SuperDrive / generic USB DVD — modern Macs have no built-in drive)
 - **Import** folders of MP3 / M4A / AAC / WAV / AIFF / FLAC / existing M4B
 - **Group many tracks into one chapter** (a CD track is not a book chapter)
-- Edit chapters, cover art, and metadata
-- **Export a real M4B**, or chapterize an existing M4B with stream copy (`-c copy`) — no AAC re-encode just to change chapters, cover, or tags
+- Edit chapters, cover art, and metadata in the three-pane binder
+- **Export a real M4B** with Nero `moov/udta/chpl` and a QuickTime text chapter track (`tref/chap`)
+- AAC that already matches the preset is copied. Chapters, cover, and tags are stamped without re-encoding
 
-Not in v1: Audible AAX/AA DRM stripping, cloud accounts, a music-library manager, or the App Store sandbox.
+Audible `.aa` / `.aax` files are rejected. ChapterBinder does not unlock DRM.
+
+There is no account, no analytics, and no third-party SDK.
+
+## Targets
+
+| Target | Bundle ID | Sandbox | Helpers | CD rip |
+| --- | --- | --- | --- | --- |
+| `ChapterBinder` | `com.benmonroe.ChapterBinder` | Off. Hardened Runtime on | Optional static binaries in `Contents/Helpers` | Yes |
+| `ChapterBinder-MAS` | `com.benmonroe.ChapterBinder.mas` | On | None | Compiled out |
+
+Both show the name ChapterBinder. The store build can sit beside the direct-download build. Ripping is direct-download only. 1.1.0 archives the store target and does not upload to App Store Connect. See `APP_STORE_REVIEW.md`.
 
 ## Requirements
 
 - macOS 14+
 - Apple Silicon or Intel
 - Xcode 16+ (Swift 6)
-- Bundled **ffmpeg** + **ffprobe** for export
-- Bundled **cdparanoia** / **libcdio-paranoia** for ripping (the UI also has a mock TOC so you can develop without a drive)
+- ffmpeg is **not** required to export. It is an optional Developer ID fallback for loudness normalize, silence trimming, and files AVFoundation cannot decode
 
 ## Folder tree
 
 ```
 ChapterBinder/
 ├── README.md
-├── Helpers/                      # drop static ffmpeg, ffprobe, cdparanoia here
-├── scripts/bundle-helpers.sh     # Xcode run script → Contents/Helpers
+├── VERSION.md
+├── APP_STORE_REVIEW.md
+├── Helpers/                      # optional static ffmpeg, ffprobe, cdparanoia
+├── scripts/bundle-helpers.sh     # Developer ID run script only
 ├── ChapterBinder.xcodeproj
+├── ChapterBinderTests/
 └── ChapterBinder/
     ├── ChapterBinderApp.swift
     ├── ContentView.swift
     ├── Info.plist
+    ├── PrivacyInfo.xcprivacy
     ├── ChapterBinder.entitlements
+    ├── ChapterBinder-MAS.entitlements
+    ├── Export/                   # timeline, Nero chpl, stamper, native export
     ├── App/AppModel.swift
-    ├── Models/                   # BookProject, Disc, SourceTrack, Chapter, presets
+    ├── Models/
     ├── Persistence/ProjectStore.swift
     ├── Player/AudiobookPlayer.swift
-    ├── Services/                 # import, probe, export, CD, MusicBrainz, silence
-    ├── Views/                    # three-pane UI
+    ├── Services/
+    ├── Views/
     └── Utilities/
 ```
 
@@ -59,7 +75,7 @@ Disc
   index, musicBrainzId?, rawTOC, ripStatus
 
 SourceTrack
-  id, url, discIndex, trackIndex, duration
+  id, path, bookmark, discIndex, trackIndex, duration
   originalTitle, codec, channels, sampleRate
   isRip, ripOK
 
@@ -78,47 +94,27 @@ Merge tracks 4–7 into one chapter = one `Chapter` whose `trackIDs` are those f
 open ChapterBinder.xcodeproj
 ```
 
-The app target is **not sandboxed** (`ENABLE_APP_SANDBOX = NO`) so ffmpeg and raw optical-drive access stay sane. Hardened Runtime is on for notarization.
+Scheme `ChapterBinder` is the direct-download app (`ENABLE_APP_SANDBOX = NO`, Hardened Runtime on). Scheme `ChapterBinder-MAS` is the sandboxed archive. Product → Build (⌘B) or Archive. Do not upload the 1.1.0 archive.
 
-1. Put `ffmpeg` and `ffprobe` in `Helpers/` (see that folder’s README).
-2. Optionally put `cdparanoia` there too (`brew install cdparanoia` is fine for local work).
-3. Product → Build (⌘B) or Archive.
+Helpers are optional. If you have static binaries, put them in `Helpers/` and the Developer ID Run Script copies them into `Contents/Helpers`. The script does not copy Homebrew. The MAS target has no helper script.
 
-The Run Script phase `scripts/bundle-helpers.sh` copies helpers into `ChapterBinder.app/Contents/Helpers`.
+## Optional helpers
 
-### Homebrew (local development only)
-
-```bash
-brew install ffmpeg cdparanoia
-```
-
-Homebrew binaries are **not** relocatable. They work when the Cellar is present on your machine. For a build you will notarize and send to someone else, use static universal binaries in `Helpers/`.
-
-## Bundled helpers
-
-| Path in the `.app` | Binary |
+| Path in the direct-download `.app` | Binary |
 | --- | --- |
-| `Contents/Helpers/ffmpeg` | encode / concat / mux |
-| `Contents/Helpers/ffprobe` | probe + export verification |
-| `Contents/Helpers/cdparanoia` | CD rip with jitter correction |
+| `Contents/Helpers/ffmpeg` | Loudness, silence trim, encode fallback |
+| `Contents/Helpers/ffprobe` | Diagnostic chapter count only |
+| `Contents/Helpers/cdparanoia` | CD rip on the direct-download build |
 
-Runtime lookup: bundle Helpers → `/opt/homebrew/bin` → `/usr/local/bin` → `PATH`.
-
-If paranoia is missing, the ripper interface still exists; the mock TOC path writes silent WAVs so the rest of the app can be developed. A future fallback is `ffmpeg -f libcdio`.
+Runtime lookup is `Contents/Helpers` only. A missing helper does not block export.
 
 ## Entitlements
 
-v1 is a **direct download**, not App Store sandboxed.
+`ChapterBinder.entitlements` (direct download): library validation off, unsigned executable memory, optical drive, network client, user-selected files, Downloads. No Apple Events. Sandbox off.
 
-`ChapterBinder.entitlements`:
+`ChapterBinder-MAS.entitlements`: app sandbox, user-selected read-write, app-scoped bookmarks, network client, Downloads read-write. Nothing else.
 
-- `com.apple.security.cs.disable-library-validation` — ffmpeg and its dylibs
-- `com.apple.security.cs.allow-unsigned-executable-memory` — some ffmpeg builds
-- `com.apple.security.device.dvd` — optical drive
-- `com.apple.security.network.client` — MusicBrainz / Cover Art Archive / Open Library / Google Books
-- User-selected files read-write (harmless with sandbox off; required if you turn sandbox on later)
-
-Hardened Runtime stays enabled.
+`PrivacyInfo.xcprivacy` sets tracking to false and lists no tracking domains.
 
 ## Notarization notes
 
@@ -135,7 +131,7 @@ xcrun notarytool submit ChapterBinder.zip --apple-id ... --team-id ... --wait
 xcrun stapler staple ChapterBinder.app
 ```
 
-`ExportOptions.plist` should use `method = developer-id` (Developer ID Application), **not** `app-store`.
+`ExportOptions.plist` for the direct-download archive should use `method = developer-id` (Developer ID Application). The MAS scheme archives locally with the sandbox entitlement. Uploading that archive is a later step, not 1.1.0.
 
 Sign the bundled helpers too:
 
@@ -162,21 +158,27 @@ If Gatekeeper blocks ffmpeg, you likely forgot `disable-library-validation` or s
 
 ## Export correctness
 
-- Probe every file (ffprobe, AVFoundation fallback)
-- Ordered `SourceTrack` list, then `Chapter` list that owns 1…n tracks
-- Chapter start times from **actual** durations
-- AAC matching + bind/chapters only → concat demuxer + `-c copy`
-- Existing M4B chapter/cover/tag edit → remux only
-- Otherwise encode AAC, concat, mux
-- `ffmetadata` with global tags + `[CHAPTER]` (`TIMEBASE=1/1000`)
-- Mux to `.m4b` with **major brand `M4B`** and **`media_type=2`** (iTunes `stik` = Audiobook) so Books files it under Audiobooks, not Music
-- QuickTime chapters via ffmetadata; Nero `chpl` via `-movflags +use_metadata_tags`
-- Verify with ffprobe: chapter count, duration, tags, cover. **Missing chapters fail the job.**
-- Temp files on the destination volume. Delete on success or cancel; keep on failure.
+Chapterline 1.3.1 reads Nero `chpl` and AVFoundation chapter groups. ffmpeg `[CHAPTER]` blocks and `-movflags +use_metadata_tags` do **not** write the Nero atom Chapterline parses. ffprobe’s chapter count is a diagnostic, not success.
 
-If chapters do not show in Apple Books, that is a bug, not a known limitation.
+When the project has N chapters and N ≥ 2, the file contains both:
+
+1. `moov/udta/chpl` version 1, flags 0, count as a big-endian UInt32 at payload offset 4, starts in 100-nanosecond ticks
+2. A QuickTime text chapter track with `tref/chap` on the audio track, so `AVURLAsset.loadChapterMetadataGroups` returns N groups
+
+Also written: extension `.m4b`, major brand `M4B` (compatible brands include `mp42` and `isom`), integer iTunes `stik` = 2, title, artist, album, and `covr` when the project has a cover.
+
+- Chapter times come from probed durations. `startOffset` / `endOffset` shift the timeline. Starts must increase by at least 0.1 seconds or the job fails before mux
+- One chapter in the project writes one chapter
+- A volume split writes one stamped `.m4b` per part, and that part’s chapter table starts at 0
+- AAC-in-MP4 with a matching rate and channel count is stream-copied. Other sources encode to AAC-LC at the preset bitrate
+- A missing `chpl` or `tref/chap` fails the job. The file is not left for Books to show as a single chapter
+- The queue reports `12 chapters written (AV 12, Nero 12)`
+- Temp files stay on the destination volume. They are deleted on success or cancel and kept on failure
+- Finished files open with `NSWorkspace.shared.open`
 
 ## CD ripper
+
+Direct-download target only. The App Store build hides the Disc menu and compiles out `CDRipService` and `OpticalDriveWatcher`.
 
 - DiskArbitration + IOKit watch for `CD_DA` / `IOCDMedia`
 - USB unplug mid-rip is treated as the disc disappearing
@@ -186,4 +188,6 @@ If chapters do not show in Apple Books, that is a bug, not a known limitation.
 
 ## Projects
 
-Saved as JSON in `~/Library/Application Support/ChapterBinder/Projects/`. Originals are referenced, not copied, except CD rips, covers, and encode temps. Rip cache is cleared after a successful export.
+Saved as JSON in `~/Library/Application Support/ChapterBinder/Projects/`. Originals are referenced, not copied, except CD rips, covers, and encode temps. Each source track and the cover store an app-scoped security-scoped bookmark beside the path. Older JSON without those keys still opens. The sandboxed app asks you to relink a file when its bookmark is stale. The direct-download app falls back to the path.
+
+Rip cache is cleared after a successful export. `startAccessingSecurityScopedResource` is held while probing, playing, and exporting, and released when the project closes.

@@ -89,8 +89,13 @@ nonisolated enum AudioFileType {
     static let extensions: Set<String> = [
         "mp3", "m4a", "m4b", "aac", "wav", "aiff", "aif", "flac", "caf", "mp4"
     ]
+    static let drmExtensions: Set<String> = ["aa", "aax"]
 
     static func isAudio(_ url: URL) -> Bool {
         extensions.contains(url.pathExtension.lowercased())
+    }
+
+    static func isAudibleDRM(_ url: URL) -> Bool {
+        drmExtensions.contains(url.pathExtension.lowercased())
     }
 }

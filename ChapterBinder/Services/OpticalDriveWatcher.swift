@@ -1,3 +1,4 @@
+#if !APP_STORE
 import Foundation
 import DiskArbitration
 import IOKit
@@ -148,4 +149,4 @@ final class OpticalDriveWatcher {
         return false
     }
 }
-
+#endif

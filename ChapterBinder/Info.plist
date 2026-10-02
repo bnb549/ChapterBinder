@@ -129,8 +129,8 @@
 			</dict>
 		</dict>
 	</array>
-	<key>NSAppleEventsUsageDescription</key>
-	<string>ChapterBinder opens finished audiobooks in Apple Books.</string>
+	<key>CFBundleGetInfoString</key>
+	<string>Optional cover and metadata lookup uses MusicBrainz, the Cover Art Archive, Open Library, and Google Books. If lookup fails, export continues offline. Audio never leaves this Mac.</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.entertainment</string>
 	<key>LSMinimumSystemVersion</key>

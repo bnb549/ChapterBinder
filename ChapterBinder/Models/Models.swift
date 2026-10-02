@@ -1,6 +1,6 @@
 import Foundation
 
-enum TrackSortMode: String, Codable, CaseIterable, Identifiable, Sendable {
+nonisolated enum TrackSortMode: String, Codable, CaseIterable, Identifiable, Sendable {
     case naturalFilename
     case embeddedTrack
     case duration
@@ -16,7 +16,7 @@ enum TrackSortMode: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
-enum RipStatus: String, Codable, Sendable {
+nonisolated enum RipStatus: String, Codable, Sendable {
     case idle
     case ripping
     case complete
@@ -24,7 +24,7 @@ enum RipStatus: String, Codable, Sendable {
     case skipped
 }
 
-struct Disc: Identifiable, Codable, Hashable, Sendable {
+nonisolated struct Disc: Identifiable, Codable, Hashable, Sendable {
     var id: UUID
     var index: Int
     var musicBrainzId: String?
@@ -52,7 +52,7 @@ struct Disc: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-struct SourceTrack: Identifiable, Codable, Hashable, Sendable {
+nonisolated struct SourceTrack: Identifiable, Codable, Hashable, Sendable {
     var id: UUID
     var path: String
     var bookmark: Data?
@@ -115,7 +115,7 @@ struct SourceTrack: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-struct Chapter: Identifiable, Codable, Hashable, Sendable {
+nonisolated struct Chapter: Identifiable, Codable, Hashable, Sendable {
     var id: UUID
     var title: String
     /// Source tracks that belong to this chapter, in listen order.
@@ -150,7 +150,7 @@ struct Chapter: Identifiable, Codable, Hashable, Sendable {
     var end: TimeInterval { start + duration }
 }
 
-struct BookProject: Identifiable, Codable, Equatable, Sendable {
+nonisolated struct BookProject: Identifiable, Codable, Equatable, Sendable {
     var id: UUID
     var title: String
     var sortTitle: String
@@ -166,6 +166,7 @@ struct BookProject: Identifiable, Codable, Equatable, Sendable {
     var copyright: String
     var comment: String
     var coverPath: String?
+    var coverBookmark: Data?
     var outputPreset: OutputPreset
     var customBitrate: Int
     var customChannels: Int
@@ -199,6 +200,7 @@ struct BookProject: Identifiable, Codable, Equatable, Sendable {
         copyright: String = "",
         comment: String = "",
         coverPath: String? = nil,
+        coverBookmark: Data? = nil,
         outputPreset: OutputPreset = .spokenWord,
         customBitrate: Int = 64,
         customChannels: Int = 1,
@@ -231,6 +233,7 @@ struct BookProject: Identifiable, Codable, Equatable, Sendable {
         self.copyright = copyright
         self.comment = comment
         self.coverPath = coverPath
+        self.coverBookmark = coverBookmark
         self.outputPreset = outputPreset
         self.customBitrate = customBitrate
         self.customChannels = customChannels
@@ -355,14 +358,14 @@ struct BookProject: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
-struct EncodeSettings: Equatable, Sendable {
+nonisolated struct EncodeSettings: Equatable, Sendable {
     var keepSource: Bool
     var bitrateKbps: Int
     var channels: Int
     var sampleRate: Int
 }
 
-enum OutputContainer: String, Codable, CaseIterable, Identifiable, Sendable {
+nonisolated enum OutputContainer: String, Codable, CaseIterable, Identifiable, Sendable {
     case m4b
     case m4a
 
@@ -371,13 +374,13 @@ enum OutputContainer: String, Codable, CaseIterable, Identifiable, Sendable {
     var label: String { rawValue.uppercased() }
 }
 
-struct EmbeddedChapter: Sendable, Equatable {
+nonisolated struct EmbeddedChapter: Sendable, Equatable {
     var title: String
     var start: TimeInterval
     var duration: TimeInterval
 }
 
-struct ProbeResult: Sendable {
+nonisolated struct ProbeResult: Sendable {
     var duration: TimeInterval
     var codec: String
     var channels: Int
@@ -400,7 +403,7 @@ struct ProbeResult: Sendable {
     var tags: [String: String]
 }
 
-enum AppError: LocalizedError, Sendable {
+nonisolated enum AppError: LocalizedError, Sendable {
     case helperMissing(String)
     case probeFailed(String)
     case importFailed(String)
@@ -411,11 +414,12 @@ enum AppError: LocalizedError, Sendable {
     case noOpticalDrive
     case discDisappeared
     case fileMissing(String)
+    case relinkRequired(String)
 
     var errorDescription: String? {
         switch self {
         case .helperMissing(let name):
-            "Missing helper “\(name)”. Place a universal binary in Contents/Helpers or install via Homebrew. See README."
+            "Optional helper “\(name)” is not in Contents/Helpers. Export of AAC, MP3, WAV, and FLAC uses the built-in encoder. Homebrew is not required."
         case .probeFailed(let message):
             "Could not read audio file: \(message)"
         case .importFailed(let message):
@@ -434,6 +438,8 @@ enum AppError: LocalizedError, Sendable {
             "The audio CD disappeared during the rip. USB optical drives disconnect easily — check the cable and try that disc again."
         case .fileMissing(let path):
             "Missing file: \(path)"
+        case .relinkRequired(let path):
+            "ChapterBinder needs access to \(URL(fileURLWithPath: path).lastPathComponent). Choose the file to relink it."
         }
     }
 }

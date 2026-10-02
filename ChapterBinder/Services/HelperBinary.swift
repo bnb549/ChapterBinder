@@ -1,6 +1,6 @@
 import Foundation
 
-enum HelperBinary: String, Sendable {
+nonisolated enum HelperBinary: String, Sendable {
     case ffmpeg
     case ffprobe
     case cdparanoia
@@ -15,7 +15,7 @@ enum HelperBinary: String, Sendable {
         }
     }
 
-    /// Search order: app bundle Helpers, then Homebrew, then PATH.
+    /// Only a static binary shipped in Contents/Helpers. Homebrew is not required.
     func url() throws -> URL {
         if let found = Self.find(names: names) {
             return found
@@ -47,16 +47,6 @@ enum HelperBinary: String, Sendable {
         }
         if let contents = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers") as URL? {
             candidates.append(contents)
-        }
-
-        candidates.append(URL(fileURLWithPath: "/opt/homebrew/bin"))
-        candidates.append(URL(fileURLWithPath: "/usr/local/bin"))
-        candidates.append(URL(fileURLWithPath: "/opt/local/bin"))
-
-        if let path = ProcessInfo.processInfo.environment["PATH"] {
-            for part in path.split(separator: ":") {
-                candidates.append(URL(fileURLWithPath: String(part)))
-            }
         }
 
         var seen = Set<String>()

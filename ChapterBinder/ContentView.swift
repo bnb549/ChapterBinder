@@ -26,6 +26,7 @@ struct ContentView: View {
             if let project = model.selectedProject {
                 model.player.load(project)
             }
+            model.refreshFileAccess()
         }
         .alert("Something went wrong", isPresented: Binding(
             get: { model.errorMessage != nil },
@@ -48,6 +49,7 @@ struct ContentView: View {
             } else {
                 model.player.unload()
             }
+            model.refreshFileAccess()
         }
         .focusable()
         .onKeyPress { press in
@@ -58,6 +60,20 @@ struct ContentView: View {
     private var centerPane: some View {
         VStack(spacing: 0) {
             CDBannerView()
+            if !model.relinkPaths.isEmpty {
+                HStack(spacing: 10) {
+                    Image(systemName: "link.badge.plus")
+                    Text("A source file needs to be relinked before it can play or export.")
+                        .font(.callout)
+                    Spacer()
+                    Button("Relink") { model.relinkFirst() }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(.quaternary.opacity(0.4))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Relink source files")
+            }
             if model.selectedProject == nil {
                 EmptyStateView()
             } else if model.selectedProject?.tracks.isEmpty == true {
