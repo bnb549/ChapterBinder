@@ -98,9 +98,16 @@ nonisolated enum ExportPlanner {
             .appendingPathComponent("\(name) - Part \(index + 1).\(ext)")
     }
 
+    /// Intermediate audio stays in the app temp directory. A sandboxed save
+    /// grant covers the chosen file, not a sibling folder next to it.
     static func tempDirectory(near destination: URL) -> URL {
-        destination.deletingLastPathComponent()
-            .appendingPathComponent(".__chapterbinder_\(UUID().uuidString)", isDirectory: true)
+        let name = destination.deletingPathExtension().lastPathComponent
+        let cleaned = String(name.unicodeScalars.filter {
+            CharacterSet.alphanumerics.contains($0) || $0 == "-" || $0 == "_"
+        }.prefix(40))
+        let safe = cleaned.isEmpty ? "export" : cleaned
+        return FileManager.default.temporaryDirectory
+            .appendingPathComponent("chapterbinder-\(safe)-\(UUID().uuidString)", isDirectory: true)
     }
 
     static func projectContaining(chapters: [Chapter], in project: BookProject) -> BookProject {

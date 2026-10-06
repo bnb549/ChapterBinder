@@ -108,6 +108,15 @@ nonisolated struct SourceTrack: Identifiable, Codable, Hashable, Sendable {
 
     var url: URL { URL(fileURLWithPath: path) }
     var filename: String { url.lastPathComponent }
+
+    /// Name shown in the chapter field. A cleaned title is used when it still
+    /// says something. Otherwise the original name stays so it can be edited.
+    var suggestedChapterTitle: String {
+        let raw = originalTitle.isEmpty ? filename : originalTitle
+        let cleaned = NameCleanup.smart(raw)
+        if !cleaned.isEmpty { return cleaned }
+        return NameCleanup.stripExtension(raw)
+    }
     var isAAC: Bool {
         let c = codec.lowercased()
         if c.contains("alac") { return false }
@@ -173,6 +182,9 @@ nonisolated struct BookProject: Identifiable, Codable, Equatable, Sendable {
     var customSampleRate: Int
     var outputContainer: OutputContainer
     var outputPath: String?
+    /// Security-scoped bookmark for `outputPath`. The sandbox cannot write a
+    /// path that was saved as a string alone.
+    var outputBookmark: Data?
     var loudnessNormalize: Bool
     var stripSilence: Bool
     var splitMaxBytes: Int64?
@@ -207,6 +219,7 @@ nonisolated struct BookProject: Identifiable, Codable, Equatable, Sendable {
         customSampleRate: Int = 22050,
         outputContainer: OutputContainer = .m4b,
         outputPath: String? = nil,
+        outputBookmark: Data? = nil,
         loudnessNormalize: Bool = false,
         stripSilence: Bool = false,
         splitMaxBytes: Int64? = nil,
@@ -240,6 +253,7 @@ nonisolated struct BookProject: Identifiable, Codable, Equatable, Sendable {
         self.customSampleRate = customSampleRate
         self.outputContainer = outputContainer
         self.outputPath = outputPath
+        self.outputBookmark = outputBookmark
         self.loudnessNormalize = loudnessNormalize
         self.stripSilence = stripSilence
         self.splitMaxBytes = splitMaxBytes
@@ -410,10 +424,6 @@ nonisolated enum AppError: LocalizedError, Sendable {
     case exportFailed(String)
     case verificationFailed(String)
     case cancelled
-    case ripFailed(String)
-    case noOpticalDrive
-    case discDisappeared
-    case fileMissing(String)
     case relinkRequired(String)
 
     var errorDescription: String? {
@@ -430,14 +440,6 @@ nonisolated enum AppError: LocalizedError, Sendable {
             "Export verification failed: \(message)"
         case .cancelled:
             "Cancelled"
-        case .ripFailed(let message):
-            "CD rip failed: \(message)"
-        case .noOpticalDrive:
-            "No optical drive is connected. Plug in a USB SuperDrive or a generic USB DVD drive, then insert an audio CD."
-        case .discDisappeared:
-            "The audio CD disappeared during the rip. USB optical drives disconnect easily — check the cable and try that disc again."
-        case .fileMissing(let path):
-            "Missing file: \(path)"
         case .relinkRequired(let path):
             "ChapterBinder needs access to \(URL(fileURLWithPath: path).lastPathComponent). Choose the file to relink it."
         }

@@ -50,13 +50,6 @@ struct SidebarView: View {
 
             Divider()
             VStack(alignment: .leading, spacing: 6) {
-                #if !APP_STORE
-                Button {
-                    model.newFromCD()
-                } label: {
-                    Label("New from CD", systemImage: "opticaldisc")
-                }
-                #endif
                 Button {
                     model.newFromFiles()
                 } label: {
@@ -96,11 +89,20 @@ private struct QueueRow: View {
                     .foregroundStyle(.secondary)
             }
             if job.state == .running || job.state == .queued {
-                ProgressView(value: job.progress)
-                Text(job.message)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                ProgressView(value: min(max(job.progress, 0), 1))
+                    .progressViewStyle(.linear)
+                    .accessibilityLabel("Export progress")
+                    .accessibilityValue("\(Int((job.progress * 100).rounded())) percent")
+                HStack {
+                    Text(job.message)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Spacer()
+                    Text("\(Int((job.progress * 100).rounded()))%")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
             }
             if job.state == .succeeded {
                 Text(job.message)

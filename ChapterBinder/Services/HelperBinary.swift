@@ -3,15 +3,11 @@ import Foundation
 nonisolated enum HelperBinary: String, Sendable {
     case ffmpeg
     case ffprobe
-    case cdparanoia
-    case cdParanoiaHyphen = "cd-paranoia"
 
     var names: [String] {
         switch self {
         case .ffmpeg: ["ffmpeg"]
         case .ffprobe: ["ffprobe"]
-        case .cdparanoia: ["cdparanoia", "cd-paranoia"]
-        case .cdParanoiaHyphen: ["cd-paranoia", "cdparanoia"]
         }
     }
 
@@ -29,7 +25,6 @@ nonisolated enum HelperBinary: String, Sendable {
 
     static var ffmpegAvailable: Bool { HelperBinary.ffmpeg.optionalURL() != nil }
     static var ffprobeAvailable: Bool { HelperBinary.ffprobe.optionalURL() != nil }
-    static var cdparanoiaAvailable: Bool { HelperBinary.cdparanoia.optionalURL() != nil }
 
     static func find(names: [String]) -> URL? {
         let fileManager = FileManager.default

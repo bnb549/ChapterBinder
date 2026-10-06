@@ -15,10 +15,6 @@ struct ChapterBinderApp: App {
             CommandGroup(replacing: .newItem) {
                 Button("New from Files…") { model.newFromFiles() }
                     .keyboardShortcut("n", modifiers: [.command])
-                #if !APP_STORE
-                Button("New from CD") { model.newFromCD() }
-                    .keyboardShortcut("n", modifiers: [.command, .shift])
-                #endif
                 Button("Add Files…") { model.addFilesToCurrent() }
                     .keyboardShortcut("i", modifiers: [.command])
             }
@@ -42,16 +38,6 @@ struct ChapterBinderApp: App {
                 Button("Detect Silence") { model.detectSilence() }
                 Button("Apply Silence Breaks") { model.applySilenceBreaks() }
             }
-            #if !APP_STORE
-            CommandMenu("Disc") {
-                Button("Rip Audio CD") { model.ripDetectedDisc(asNewDisc: model.selectedProject?.discs.isEmpty ?? true) }
-                Button("This Is the Next Disc") { model.ripDetectedDisc(asNewDisc: true) }
-                Button("Lookup Disc") { model.lookupDisc() }
-                Divider()
-                Button("Insert Mock Audio CD") { model.driveWatcher.insertMock() }
-                Button("Remove Mock CD") { model.driveWatcher.removeMock() }
-            }
-            #endif
             CommandMenu("Book") {
                 Button("Catalog Lookup") { model.lookupCatalog() }
                 Button("Choose Cover…") { model.chooseCover() }

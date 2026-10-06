@@ -5,7 +5,7 @@ extension BookProject {
     mutating func rebuildOneChapterPerTrack() {
         chapters = tracks.enumerated().map { index, track in
             Chapter(
-                title: NameCleanup.smart(track.originalTitle.isEmpty ? track.filename : track.originalTitle),
+                title: track.suggestedChapterTitle,
                 trackIDs: [track.id],
                 startOffset: 0,
                 endOffset: nil
@@ -81,7 +81,7 @@ extension BookProject {
             if original.trackIDs.count == 1 {
                 title = original.title
             } else {
-                title = NameCleanup.smart(track.originalTitle.isEmpty ? track.filename : track.originalTitle)
+                title = track.suggestedChapterTitle
             }
             replacements.append(
                 Chapter(title: title, trackIDs: [tid], startOffset: startOffset, endOffset: endOffset)
@@ -222,8 +222,7 @@ extension BookProject {
         tracks.append(contentsOf: prepared)
         if rebuildChapters {
             for track in prepared {
-                let title = NameCleanup.smart(track.originalTitle.isEmpty ? track.filename : track.originalTitle)
-                chapters.append(Chapter(title: title, trackIDs: [track.id]))
+                chapters.append(Chapter(title: track.suggestedChapterTitle, trackIDs: [track.id]))
             }
             recomputeTimeline()
         }
@@ -236,7 +235,8 @@ extension BookProject {
             return
         }
         if embedded.isEmpty {
-            chapters = [Chapter(title: displayTitle, trackIDs: [track.id], startOffset: 0, endOffset: nil)]
+            let title = track.suggestedChapterTitle.isEmpty ? displayTitle : track.suggestedChapterTitle
+            chapters = [Chapter(title: title, trackIDs: [track.id], startOffset: 0, endOffset: nil)]
             recomputeTimeline()
             return
         }

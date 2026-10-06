@@ -14,6 +14,9 @@ final class ExportJob: Identifiable {
     var message: String
     var outputURLs: [URL]
     var error: String?
+    var fileName: String
+    var hideBanner: Bool
+    var output: SecurityScope.Lease?
 
     init(project: BookProject) {
         id = UUID()
@@ -24,6 +27,14 @@ final class ExportJob: Identifiable {
         message = "Queued"
         outputURLs = []
         error = nil
+        fileName = ""
+        hideBanner = false
+        output = nil
+    }
+
+    func releaseOutput() {
+        output?.stop()
+        output = nil
     }
 }
 
@@ -34,8 +45,23 @@ final class ExportQueue {
 
     var isBusy: Bool { jobs.contains { $0.state == .running || $0.state == .queued } }
 
-    func enqueue(_ project: BookProject) {
-        jobs.insert(ExportJob(project: project), at: 0)
+    /// The job the main window should track. Running work wins over the latest result.
+    var trackedJob: ExportJob? {
+        if let active = jobs.first(where: { job in
+            !job.hideBanner && (job.state == .running || job.state == .queued)
+        }) {
+            return active
+        }
+        return jobs.first { job in
+            !job.hideBanner && (job.state == .succeeded || job.state == .failed)
+        }
+    }
+
+    func enqueue(_ project: BookProject, output: SecurityScope.Lease) {
+        let job = ExportJob(project: project)
+        job.output = output
+        job.fileName = output.url.lastPathComponent
+        jobs.insert(job, at: 0)
         pump()
     }
 
@@ -44,6 +70,7 @@ final class ExportQueue {
         if job.state == .queued {
             job.state = .cancelled
             job.message = "Cancelled"
+            job.releaseOutput()
         } else if job.state == .running {
             job.state = .cancelled
             job.message = "Cancelling…"
@@ -51,7 +78,12 @@ final class ExportQueue {
         }
     }
 
+    func dismissBanner(_ id: UUID) {
+        jobs.first { $0.id == id }?.hideBanner = true
+    }
+
     func remove(_ id: UUID) {
+        jobs.first { $0.id == id }?.releaseOutput()
         jobs.removeAll { $0.id == id }
     }
 
@@ -69,22 +101,31 @@ final class ExportQueue {
     private func run(_ job: ExportJob) async {
         job.state = .running
         job.message = "Starting"
+        defer { job.releaseOutput() }
         guard let snapshot = ProjectLookup.current?(job.projectID) else {
             job.state = .failed
             job.error = "Project is no longer open."
             job.message = "Failed"
             return
         }
-        guard let outputPath = snapshot.outputPath, !outputPath.isEmpty else {
+        let destination: URL
+        if let output = job.output {
+            destination = output.url
+        } else if let outputPath = snapshot.outputPath, !outputPath.isEmpty,
+                  let lease = try? SecurityScope.outputLease(bookmark: snapshot.outputBookmark, path: outputPath) {
+            job.output = lease
+            destination = lease.url
+        } else {
             job.state = .failed
             job.error = "Choose an output file before exporting."
             job.message = "Failed"
             return
         }
-        let destination = URL(fileURLWithPath: outputPath)
+        job.fileName = destination.lastPathComponent
         do {
             let report = try await ExportService.export(project: snapshot, destination: destination) { progress in
                 Task { @MainActor in
+                    guard job.state == .running else { return }
                     job.progress = progress.fraction
                     job.message = progress.message
                 }

@@ -6,7 +6,7 @@ struct ProcessResult: Sendable {
     var stderr: String
 }
 
-/// Runs bundled/system helpers (ffmpeg, ffprobe, cdparanoia) with cancellation
+/// Runs an optional helper in Contents/Helpers, such as ffmpeg or ffprobe, with cancellation.
 /// and optional line-oriented progress from stdout.
 nonisolated enum ProcessRunner {
     final class DataBox: @unchecked Sendable {

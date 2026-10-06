@@ -15,10 +15,10 @@ Cover and metadata lookup may contact MusicBrainz, the Cover Art Archive, Open L
 
 `PrivacyInfo.xcprivacy` sets `NSPrivacyTracking` to false and lists no tracking domains.
 
-## Not in the store build
+## Not in this build
 
-- No CD ripping. The optical-drive watcher and cdparanoia are compiled out with `APP_STORE`. The Disc menu is hidden. Ripping ships only in the direct-download build.
-- No bundled ffmpeg, ffprobe, or other helper. `Contents/Helpers` is absent.
+- No CD ripping, optical-drive watcher, or Disc menu.
+- No bundled ffmpeg, ffprobe, or other helper. `Contents/Helpers` is absent. Loudness normalize and silence trimming are unavailable.
 - Entitlements are sandbox, user-selected read-write, app-scoped bookmarks, network client, and Downloads read-write.
 
-The direct-download bundle ID stays `com.benmonroe.ChapterBinder`. This target uses `com.benmonroe.ChapterBinder.mas` so the two builds can be installed side by side. The display name is ChapterBinder on both.
+The bundle ID is `com.benmonroe.ChapterBinder.mas`. The display name is ChapterBinder.

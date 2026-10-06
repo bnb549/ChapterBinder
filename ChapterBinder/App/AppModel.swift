@@ -14,18 +14,7 @@ final class AppModel {
     var selectedProjectID: BookProject.ID?
     var selection: Set<OutlineRowID> = []
     var editingChapterID: Chapter.ID?
-    #if !APP_STORE
-    var cdIgnored = false
-    var ripQuality: RipQuality = .paranoiaFull
-    var isRipping = false
-    var ripProgress: RipProgress?
-    var pendingDiscNumber: Int = 2
-    #endif
-    #if APP_STORE
     var statusMessage: String = "Drop a folder or open an M4B."
-    #else
-    var statusMessage: String = "Drop a folder, open an M4B, or rip a CD."
-    #endif
     var errorMessage: String?
     var isImporting = false
     var relinkPaths: [String] = []
@@ -39,9 +28,6 @@ final class AppModel {
     let store = ProjectStore()
     let queue = ExportQueue()
     let player = AudiobookPlayer()
-    #if !APP_STORE
-    let driveWatcher = OpticalDriveWatcher()
-    #endif
     private var fileLeases: [SecurityScope.Lease] = []
 
     var selectedProject: BookProject? {
@@ -58,9 +44,6 @@ final class AppModel {
         if let project = selectedProject {
             player.load(project)
         }
-        #if !APP_STORE
-        driveWatcher.start()
-        #endif
         refreshFileAccess()
         ProjectLookup.current = { [weak self] id in
             self?.projects.first { $0.id == id }
@@ -75,20 +58,31 @@ final class AppModel {
         return Binding(
             get: { self.projects[index] },
             set: { newValue in
-                self.projects[index] = newValue
-                self.projects[index].updatedAt = .now
-                self.player.load(self.projects[index])
-                self.persist(self.projects[index])
+                self.commit(newValue, at: index)
             }
         )
     }
 
     func mutate(_ body: (inout BookProject) throws -> Void) rethrows {
         guard let index = selectedProjectIndex else { return }
-        try body(&projects[index])
-        projects[index].updatedAt = .now
-        player.load(projects[index])
-        persist(projects[index])
+        var project = projects[index]
+        try body(&project)
+        commit(project, at: index)
+    }
+
+    /// Writes a project back only when something other than `updatedAt` changed.
+    /// Text fields commit during layout, and stamping `updatedAt` on those no-ops
+    /// was invalidating the toolbar mid-layout.
+    private func commit(_ newValue: BookProject, at index: Int) {
+        guard projects.indices.contains(index) else { return }
+        var incoming = newValue
+        let previous = projects[index]
+        incoming.updatedAt = previous.updatedAt
+        guard incoming != previous else { return }
+        incoming.updatedAt = .now
+        projects[index] = incoming
+        player.load(incoming)
+        persist(incoming)
     }
 
     func newBlankProject(title: String = "Untitled Book") -> BookProject {
@@ -247,16 +241,43 @@ final class AppModel {
     }
 
     func chooseOutput() {
-        guard var project = selectedProject else { return }
+        guard let lease = makeOutputLease() else { return }
+        lease.stop()
+    }
+
+    /// Save panel plus a live write grant. The caller stops the lease, or the export queue does.
+    private func makeOutputLease() -> SecurityScope.Lease? {
+        guard let project = selectedProject else { return nil }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [UTType(filenameExtension: project.outputContainer.fileExtension) ?? .mpeg4Audio]
-        panel.nameFieldStringValue = project.suggestedFilename
         panel.canCreateDirectories = true
         panel.title = "Export Audiobook"
-        if panel.runModal() == .OK, let url = panel.url {
-            project.outputPath = url.path
-            mutate { $0.outputPath = url.path }
+        if let path = project.outputPath, !path.isEmpty {
+            let existing = URL(fileURLWithPath: path)
+            panel.directoryURL = existing.deletingLastPathComponent()
+            panel.nameFieldStringValue = existing.lastPathComponent
+        } else {
+            panel.nameFieldStringValue = project.suggestedFilename
         }
+        guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        let accessed = url.startAccessingSecurityScopedResource()
+        var bookmark = SecurityScope.bookmark(for: url)
+        if bookmark == nil && accessed && !FileManager.default.fileExists(atPath: url.path) {
+            FileManager.default.createFile(atPath: url.path, contents: Data())
+            bookmark = SecurityScope.bookmark(for: url)
+        }
+        mutate {
+            $0.outputPath = url.path
+            $0.outputBookmark = bookmark
+        }
+        if accessed {
+            return SecurityScope.Lease(url: url, accessed: true)
+        }
+        if let saved = try? SecurityScope.outputLease(bookmark: bookmark, path: url.path) {
+            return saved
+        }
+        errorMessage = "ChapterBinder could not get permission to save “\(url.lastPathComponent)”."
+        return nil
     }
 
     func chooseCover() {
@@ -311,14 +332,23 @@ final class AppModel {
     }
 
     func enqueueExport() {
-        guard var project = selectedProject else { return }
-        if project.outputPath == nil {
-            chooseOutput()
-            project = selectedProject ?? project
+        guard let project = selectedProject else { return }
+        if project.tracks.isEmpty {
+            errorMessage = "Add audio before exporting."
+            return
         }
-        guard project.outputPath != nil else { return }
-        queue.enqueue(project)
-        statusMessage = "Queued “\(project.displayTitle)”."
+        let lease: SecurityScope.Lease
+        if let path = project.outputPath, !path.isEmpty,
+           let existing = try? SecurityScope.outputLease(bookmark: project.outputBookmark, path: path) {
+            lease = existing
+        } else if let chosen = makeOutputLease() {
+            lease = chosen
+        } else {
+            return
+        }
+        let current = selectedProject ?? project
+        queue.enqueue(current, output: lease)
+        statusMessage = "Exporting “\(current.displayTitle)”…"
     }
 
     func lookupCatalog() {
@@ -399,124 +429,6 @@ final class AppModel {
         let snapped = SilenceDetection.snap(time: player.currentTime, to: silenceBreaks)
         player.seek(to: snapped)
     }
-
-    #if !APP_STORE
-    func newFromCD() {
-        cdIgnored = false
-        if driveWatcher.audioDisc == nil {
-            driveWatcher.insertMock()
-            statusMessage = "Loaded a mock 16-track audio CD so you can build the rip flow without a drive."
-        }
-        if selectedProject == nil {
-            _ = newBlankProject(title: "Untitled Audiobook")
-        }
-    }
-
-    func ignoreCD() {
-        cdIgnored = true
-        driveWatcher.removeMock()
-    }
-
-    func lookupDisc() {
-        guard let disc = driveWatcher.audioDisc else { return }
-        isLookingUp = true
-        showLookupSheet = true
-        Task {
-            defer { isLookingUp = false }
-            if let discID = disc.toc?.discID, !discID.hasPrefix("mock") {
-                catalogHits = (try? await MusicBrainzService.lookupDiscID(discID)) ?? []
-            }
-            if catalogHits.isEmpty, let project = selectedProject {
-                catalogHits = (try? await CatalogLookup.search(title: project.title, author: project.author)) ?? []
-            }
-        }
-    }
-
-    func ripDetectedDisc(asNewDisc: Bool) {
-        guard let disc = driveWatcher.audioDisc else {
-            errorMessage = AppError.noOpticalDrive.localizedDescription
-            return
-        }
-        if selectedProject == nil {
-            _ = newBlankProject(title: disc.name)
-        }
-        guard let project = selectedProject else { return }
-        isRipping = true
-        Task {
-            defer { isRipping = false }
-            do {
-                let ripper = CDRipperFactory.make(for: disc)
-                var toc = disc.toc
-                if toc == nil {
-                    toc = try await ripper.readTOC(from: disc)
-                }
-                guard let toc else { throw AppError.ripFailed("No TOC.") }
-                let discIndex: Int
-                if asNewDisc {
-                    discIndex = (project.discs.map(\.index).max() ?? 0) + 1
-                } else {
-                    discIndex = project.discs.isEmpty ? 1 : pendingDiscNumber
-                }
-                let dest = store.ripDirectory(project: project.id, disc: discIndex)
-                let urls = try await ripper.rip(
-                    disc: DetectedDisc(
-                        id: disc.id,
-                        name: disc.name,
-                        bsdName: disc.bsdName,
-                        volumeURL: disc.volumeURL,
-                        isAudioCD: true,
-                        toc: toc,
-                        isMock: disc.isMock
-                    ),
-                    tracks: toc.tracks.map(\.number),
-                    quality: ripQuality,
-                    destination: dest
-                ) { progress in
-                    Task { @MainActor in
-                        self.ripProgress = progress
-                    }
-                }
-
-                var imported: [SourceTrack] = []
-                for (i, url) in urls.enumerated() {
-                    let probe = try await ProbeService.probe(url: url)
-                    imported.append(
-                        SourceTrack(
-                            path: url.path,
-                            discIndex: discIndex,
-                            trackIndex: i + 1,
-                            duration: probe.duration,
-                            originalTitle: toc.tracks[safe: i]?.title ?? url.deletingPathExtension().lastPathComponent,
-                            codec: probe.codec,
-                            channels: probe.channels,
-                            sampleRate: probe.sampleRate,
-                            bitrate: probe.bitrate,
-                            isRip: true,
-                            ripOK: true,
-                            embeddedTrackNumber: i + 1
-                        )
-                    )
-                }
-                mutate { project in
-                    if !project.discs.contains(where: { $0.index == discIndex }) {
-                        project.discs.append(
-                            Disc(index: discIndex, musicBrainzId: toc.discID, rawTOC: toc.raw, ripStatus: .complete)
-                        )
-                    }
-                    project.appendImportedTracks(imported)
-                    if project.title == "Untitled Book" || project.title == "Untitled Audiobook" {
-                        project.title = disc.name == "Audio CD (mock)" ? "Untitled Audiobook" : disc.name
-                    }
-                }
-                pendingDiscNumber = discIndex + 1
-                statusMessage = "Ripped disc \(discIndex) (\(imported.count) tracks). Insert the next disc and choose “This is disc \(pendingDiscNumber)”."
-                refreshFileAccess()
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-        }
-    }
-    #endif
 
     func exportChapterList(_ format: ChapterListFormat) {
         guard let project = selectedProject else { return }
@@ -650,11 +562,5 @@ final class AppModel {
         } catch {
             errorMessage = error.localizedDescription
         }
-    }
-}
-
-private extension Array {
-    subscript(safe index: Int) -> Element? {
-        indices.contains(index) ? self[index] : nil
     }
 }

@@ -3,11 +3,6 @@ xcuserdata/
 DerivedData/
 .build/
 *.xcuserstate
-Helpers/ffmpeg
-Helpers/ffprobe
-Helpers/cdparanoia
-Helpers/cd-paranoia
-Helpers/*.dylib
 *.m4b
 *.m4a
 .env

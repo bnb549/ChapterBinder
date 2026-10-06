@@ -105,13 +105,7 @@ struct InspectorView: View {
                         }
                         Group {
                             if book.loudnessNormalize || book.stripSilence {
-                                #if APP_STORE
-                                Text("Loudness normalize and silence trimming are not in the App Store build. Turn them off to export. Audio stays on this Mac.")
-                                #else
-                                Text(HelperBinary.ffmpeg.optionalURL() == nil
-                                     ? "Loudness normalize and silence trimming need the optional ffmpeg helper in Contents/Helpers. Turn them off to export with the built-in encoder. Homebrew is not required."
-                                     : "Those filters use the optional ffmpeg helper. Chapters are still stamped on this Mac.")
-                                #endif
+                                Text("Loudness normalize and silence trimming are not in this build. Turn them off to export. Audio stays on this Mac.")
                             } else if ExportPlanner.canStreamCopy(project: book, settings: book.encodeSettings) {
                                 Text("AAC will be copied. Chapters, cover, and tags are stamped without re-encoding.")
                             } else {

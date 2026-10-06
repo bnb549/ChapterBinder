@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ChapterTableView: View {
     @Environment(AppModel.self) private var model
+    @FocusState private var focusedChapterID: Chapter.ID?
 
     var body: some View {
         if let project = model.selectedProject {
@@ -67,6 +68,16 @@ struct ChapterTableView: View {
                 .onDeleteCommand {
                     model.deleteSelectedMarkers()
                 }
+                .onChange(of: model.editingChapterID) { _, newID in
+                    if focusedChapterID != newID {
+                        focusedChapterID = newID
+                    }
+                }
+                .onChange(of: focusedChapterID) { _, newID in
+                    if model.editingChapterID != newID {
+                        model.editingChapterID = newID
+                    }
+                }
                 .accessibilityLabel("Chapters")
             }
         }
@@ -120,24 +131,12 @@ struct ChapterTableView: View {
     private func titleCell(_ id: OutlineRowID, _ project: BookProject) -> some View {
         switch id {
         case .chapter(let chapterID):
-            if let chapter = project.chapters.first(where: { $0.id == chapterID }) {
-                if model.editingChapterID == chapterID {
-                    TextField("Chapter title", text: Binding(
-                        get: { chapter.title },
-                        set: { newValue in
-                            model.mutate { $0.renameChapter(id: chapterID, to: newValue) }
-                        }
-                    ))
-                    .textFieldStyle(.plain)
+            if project.chapters.contains(where: { $0.id == chapterID }) {
+                TextField("Chapter title", text: chapterTitleBinding(chapterID))
+                    .textFieldStyle(.roundedBorder)
+                    .focused($focusedChapterID, equals: chapterID)
                     .onSubmit { model.editingChapterID = nil }
-                } else {
-                    Text(chapter.title)
-                        .fontWeight(.medium)
-                        .accessibilityLabel("\(chapter.title), starts at \(TimeFormatting.clock(chapter.start))")
-                        .onTapGesture(count: 2) {
-                            model.editingChapterID = chapterID
-                        }
-                }
+                    .accessibilityLabel(chapterAccessibilityLabel(chapterID, project))
             }
         case .track(_, let trackID):
             if let track = project.track(id: trackID) {
@@ -231,6 +230,25 @@ struct ChapterTableView: View {
             if let track = project.track(id: trackID) { return "\(track.discIndex)" }
         }
         return ""
+    }
+
+    private func chapterTitleBinding(_ chapterID: Chapter.ID) -> Binding<String> {
+        Binding(
+            get: {
+                model.selectedProject?.chapters.first { $0.id == chapterID }?.title ?? ""
+            },
+            set: { newValue in
+                model.mutate { $0.renameChapter(id: chapterID, to: newValue) }
+            }
+        )
+    }
+
+    private func chapterAccessibilityLabel(_ chapterID: Chapter.ID, _ project: BookProject) -> String {
+        guard let chapter = project.chapters.first(where: { $0.id == chapterID }) else {
+            return "Chapter title"
+        }
+        let name = chapter.title.isEmpty ? "Untitled chapter" : chapter.title
+        return "\(name), starts at \(TimeFormatting.clock(chapter.start))"
     }
 
     private func play(_ id: OutlineRowID, _ project: BookProject) {

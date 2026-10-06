@@ -1,7 +1,7 @@
 import Foundation
 
-/// JSON project store under Application Support. Audio originals stay put;
-/// only CD rips, covers, and encode temps are copied into the cache.
+/// JSON project store under Application Support. Audio originals stay put.
+/// Covers are stored beside the project file.
 struct ProjectStore: Sendable {
     let root: URL
     let projectsDir: URL
@@ -26,12 +26,6 @@ struct ProjectStore: Sendable {
 
     func coverURL(for id: UUID) -> URL {
         projectsDir.appendingPathComponent("\(id.uuidString)-cover.jpg")
-    }
-
-    func ripDirectory(project: UUID, disc: Int) -> URL {
-        cacheDir
-            .appendingPathComponent(project.uuidString, isDirectory: true)
-            .appendingPathComponent("disc\(disc)", isDirectory: true)
     }
 
     func loadAll() -> [BookProject] {

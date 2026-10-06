@@ -16,21 +16,20 @@ Audible `.aa` / `.aax` files are rejected. ChapterBinder does not unlock DRM.
 
 There is no account, no analytics, and no third-party SDK.
 
-## Targets
+## Target
 
 | Target | Bundle ID | Sandbox | Helpers | CD rip |
 | --- | --- | --- | --- | --- |
-| `ChapterBinder` | `com.benmonroe.ChapterBinder` | Off. Hardened Runtime on | Optional static binaries in `Contents/Helpers` | Yes |
-| `ChapterBinder-MAS` | `com.benmonroe.ChapterBinder.mas` | On | None | Compiled out |
+| `ChapterBinder-MAS` | `com.benmonroe.ChapterBinder.mas` | On | None | No |
 
-Both show the name ChapterBinder. The store build can sit beside the direct-download build. Ripping is direct-download only. 1.1.0 archives the store target and does not upload to App Store Connect. See `APP_STORE_REVIEW.md`.
+The display name is ChapterBinder. 1.1.0 archives this target and does not upload to App Store Connect. See `APP_STORE_REVIEW.md`.
 
 ## Requirements
 
 - macOS 14+
 - Apple Silicon or Intel
 - Xcode 16+ (Swift 6)
-- ffmpeg is **not** required to export. It is an optional Developer ID fallback for loudness normalize, silence trimming, and files AVFoundation cannot decode
+- Export uses the built-in encoder. Loudness normalize and silence trimming are unavailable. Detect Silence looks for an `ffmpeg` binary in `Contents/Helpers` and this app does not bundle one.
 
 ## Folder tree
 
@@ -39,8 +38,6 @@ ChapterBinder/
 ├── README.md
 ├── VERSION.md
 ├── APP_STORE_REVIEW.md
-├── Helpers/                      # optional static ffmpeg, ffprobe, cdparanoia
-├── scripts/bundle-helpers.sh     # Developer ID run script only
 ├── ChapterBinder.xcodeproj
 ├── ChapterBinderTests/
 └── ChapterBinder/
@@ -48,7 +45,6 @@ ChapterBinder/
     ├── ContentView.swift
     ├── Info.plist
     ├── PrivacyInfo.xcprivacy
-    ├── ChapterBinder.entitlements
     ├── ChapterBinder-MAS.entitlements
     ├── Export/                   # timeline, Nero chpl, stamper, native export
     ├── App/AppModel.swift
@@ -94,23 +90,9 @@ Merge tracks 4–7 into one chapter = one `Chapter` whose `trackIDs` are those f
 open ChapterBinder.xcodeproj
 ```
 
-Scheme `ChapterBinder` is the direct-download app (`ENABLE_APP_SANDBOX = NO`, Hardened Runtime on). Scheme `ChapterBinder-MAS` is the sandboxed archive. Product → Build (⌘B) or Archive. Do not upload the 1.1.0 archive.
-
-Helpers are optional. If you have static binaries, put them in `Helpers/` and the Developer ID Run Script copies them into `Contents/Helpers`. The script does not copy Homebrew. The MAS target has no helper script.
-
-## Optional helpers
-
-| Path in the direct-download `.app` | Binary |
-| --- | --- |
-| `Contents/Helpers/ffmpeg` | Loudness, silence trim, encode fallback |
-| `Contents/Helpers/ffprobe` | Diagnostic chapter count only |
-| `Contents/Helpers/cdparanoia` | CD rip on the direct-download build |
-
-Runtime lookup is `Contents/Helpers` only. A missing helper does not block export.
+Scheme `ChapterBinder-MAS` is the sandboxed app. Product → Build (⌘B) or Archive. Do not upload the 1.1.0 archive.
 
 ## Entitlements
-
-`ChapterBinder.entitlements` (direct download): library validation off, unsigned executable memory, optical drive, network client, user-selected files, Downloads. No Apple Events. Sandbox off.
 
 `ChapterBinder-MAS.entitlements`: app sandbox, user-selected read-write, app-scoped bookmarks, network client, Downloads read-write. Nothing else.
 
@@ -119,31 +101,11 @@ Runtime lookup is `Contents/Helpers` only. A missing helper does not block expor
 ## Notarization notes
 
 ```bash
-# Archive in Xcode, or:
-xcodebuild -project ChapterBinder.xcodeproj -scheme ChapterBinder \
+xcodebuild -project ChapterBinder.xcodeproj -scheme ChapterBinder-MAS \
   -configuration Release -archivePath /tmp/ChapterBinder.xcarchive archive
-
-xcodebuild -exportArchive -archivePath /tmp/ChapterBinder.xcarchive \
-  -exportPath /tmp/ChapterBinderExport -exportOptionsPlist ExportOptions.plist
-
-# Staple after notarytool
-xcrun notarytool submit ChapterBinder.zip --apple-id ... --team-id ... --wait
-xcrun stapler staple ChapterBinder.app
 ```
 
-`ExportOptions.plist` for the direct-download archive should use `method = developer-id` (Developer ID Application). The MAS scheme archives locally with the sandbox entitlement. Uploading that archive is a later step, not 1.1.0.
-
-Sign the bundled helpers too:
-
-```bash
-codesign --force --options runtime --sign "Developer ID Application: …" \
-  ChapterBinder.app/Contents/Helpers/ffmpeg \
-  ChapterBinder.app/Contents/Helpers/ffprobe
-```
-
-Then sign the `.app` last.
-
-If Gatekeeper blocks ffmpeg, you likely forgot `disable-library-validation` or signed helpers after the app.
+The archive uses the sandbox entitlement. Uploading that archive is a later step, not 1.1.0.
 
 ## Keyboard
 
@@ -158,7 +120,7 @@ If Gatekeeper blocks ffmpeg, you likely forgot `disable-library-validation` or s
 
 ## Export correctness
 
-Chapterline 1.3.1 reads Nero `chpl` and AVFoundation chapter groups. ffmpeg `[CHAPTER]` blocks and `-movflags +use_metadata_tags` do **not** write the Nero atom Chapterline parses. ffprobe’s chapter count is a diagnostic, not success.
+Chapterline 1.3.1 reads Nero `chpl` and AVFoundation chapter groups. ffmpeg `[CHAPTER]` blocks and `-movflags +use_metadata_tags` do **not** write the Nero atom Chapterline parses. Success is those two chapter tables.
 
 When the project has N chapters and N ≥ 2, the file contains both:
 
@@ -176,18 +138,8 @@ Also written: extension `.m4b`, major brand `M4B` (compatible brands include `mp
 - Temp files stay on the destination volume. They are deleted on success or cancel and kept on failure
 - Finished files open with `NSWorkspace.shared.open`
 
-## CD ripper
-
-Direct-download target only. The App Store build hides the Disc menu and compiles out `CDRipService` and `OpticalDriveWatcher`.
-
-- DiskArbitration + IOKit watch for `CD_DA` / `IOCDMedia`
-- USB unplug mid-rip is treated as the disc disappearing
-- Rips land in `~/Library/Application Support/ChapterBinder/Cache/<project>/discN/` as 16-bit 44.1 kHz WAV
-- Multi-disc: “This is disc N of this book”
-- **Insert Mock Audio CD** (Disc menu) when this machine has no drive
-
 ## Projects
 
-Saved as JSON in `~/Library/Application Support/ChapterBinder/Projects/`. Originals are referenced, not copied, except CD rips, covers, and encode temps. Each source track and the cover store an app-scoped security-scoped bookmark beside the path. Older JSON without those keys still opens. The sandboxed app asks you to relink a file when its bookmark is stale. The direct-download app falls back to the path.
+Saved as JSON in `~/Library/Application Support/ChapterBinder/Projects/`. Originals are referenced, not copied. Covers are stored beside the project. Each source track and the cover store an app-scoped security-scoped bookmark beside the path. Older JSON without those keys still opens. The app asks you to relink a file when its bookmark is stale.
 
-Rip cache is cleared after a successful export. `startAccessingSecurityScopedResource` is held while probing, playing, and exporting, and released when the project closes.
+The project cache is cleared after a successful export. `startAccessingSecurityScopedResource` is held while probing, playing, and exporting, and released when the project closes.

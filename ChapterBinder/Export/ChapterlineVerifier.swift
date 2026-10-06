@@ -19,7 +19,7 @@ nonisolated struct MP4Scan: Sendable, Equatable {
     var stikValue: UInt32?
 }
 
-/// Pass/fail gate for a finished `.m4b`. ffprobe is logged and never decides success.
+/// Pass/fail gate for a finished `.m4b`. Nero `chpl` and AVFoundation chapter groups decide success.
 nonisolated enum ChapterlineVerifier {
     private static let log = Logger(subsystem: "com.benmonroe.ChapterBinder", category: "export")
 
@@ -40,8 +40,6 @@ nonisolated enum ChapterlineVerifier {
         log.info(
             "export chapters av=\(av, privacy: .public) nero=\(nero.count, privacy: .public) expected=\(expected, privacy: .public) path=\(url.path, privacy: .public)"
         )
-        await logProbeDiagnostic(url)
-
         let report = ChapterlineReport(
             av: av,
             nero: nero.count,
@@ -127,20 +125,6 @@ nonisolated enum ChapterlineVerifier {
         if start <= 1, span <= 0.5 { return true }
         if fileDuration > 0, start <= 1, start + span >= fileDuration - 1 { return true }
         return false
-    }
-
-    private static func logProbeDiagnostic(_ url: URL) async {
-        #if !APP_STORE
-        guard let ffprobe = HelperBinary.ffprobe.optionalURL() else { return }
-        guard let result = try? await ProcessRunner.run(
-            executable: ffprobe,
-            arguments: ["-v", "error", "-show_chapters", "-of", "compact", url.path]
-        ) else { return }
-        let count = result.stdout.components(separatedBy: "start_time=").count - 1
-        log.info("ffprobe chapters=\(count, privacy: .public) diagnostic path=\(url.path, privacy: .public)")
-        #else
-        _ = url
-        #endif
     }
 }
 

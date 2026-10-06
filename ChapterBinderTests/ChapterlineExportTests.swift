@@ -73,6 +73,25 @@ nonisolated final class ChapterTimelineTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testEachTrackStartsWithItsNameInTheChapterField() {
+        let named = SourceTrack(
+            path: "/tmp/01 - The Beginning.mp3",
+            duration: 10,
+            originalTitle: "01 - The Beginning"
+        )
+        let numbered = SourceTrack(
+            path: "/tmp/Track 02.m4a",
+            duration: 12,
+            originalTitle: "Track 02"
+        )
+        var project = BookProject(title: "Book")
+        project.tracks = [named, numbered]
+        project.rebuildOneChapterPerTrack()
+        XCTAssertEqual(project.chapters.map(\.title), ["The Beginning", "Track 02"])
+        XCTAssertEqual(project.chapters.map(\.trackIDs), [[named.id], [numbered.id]])
+    }
+
     func testVolumePartStartsAtZero() {
         let first = SourceTrack(path: "/tmp/a.m4a", duration: 30, codec: "aac")
         let second = SourceTrack(path: "/tmp/b.m4a", duration: 30, codec: "aac")
@@ -152,8 +171,42 @@ nonisolated final class ProjectCompatibilityTests: XCTestCase {
         let project = try decoder.decode(BookProject.self, from: Data(json.utf8))
         XCTAssertEqual(project.title, "Old Book")
         XCTAssertNil(project.coverBookmark)
+        XCTAssertNil(project.outputBookmark)
         XCTAssertNil(project.tracks[0].bookmark)
         XCTAssertEqual(project.chapters.count, 1)
+    }
+
+    func testOutputBookmarkRoundTrips() throws {
+        var project = BookProject(title: "Saved")
+        project.outputPath = "/tmp/book.m4b"
+        project.outputBookmark = Data([1, 2, 3, 4])
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(project)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let copy = try decoder.decode(BookProject.self, from: data)
+        XCTAssertEqual(copy.outputPath, "/tmp/book.m4b")
+        XCTAssertEqual(copy.outputBookmark, Data([1, 2, 3, 4]))
+    }
+
+    func testWorkingFilesStayOutOfTheDestinationFolder() {
+        let destination = URL(fileURLWithPath: "/Users/someone/Desktop/Book Title.m4b")
+        let working = ExportPlanner.tempDirectory(near: destination)
+        let temp = FileManager.default.temporaryDirectory.standardizedFileURL.path
+        XCTAssertTrue(working.standardizedFileURL.path.hasPrefix(temp))
+        XCTAssertFalse(working.path.contains("/Users/someone/Desktop"))
+    }
+
+    func testOutputLeaseUsesAWritableFolderWithoutABookmark() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("chapterbinder-lease-\(UUID().uuidString).m4b")
+        let lease = try SecurityScope.outputLease(bookmark: nil, path: url.path)
+        defer { lease.stop() }
+        XCTAssertEqual(lease.url.path, url.path)
+        FileManager.default.createFile(atPath: lease.url.path, contents: Data("ok".utf8))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+        try? FileManager.default.removeItem(at: url)
     }
 
     func testAudibleExtensionsAreRejectedWithoutReadingAFile() {
@@ -210,6 +263,30 @@ nonisolated final class ChapterStampTests: XCTestCase {
         XCTAssertEqual(report.av, 3)
         XCTAssertEqual(report.expected, 3)
         XCTAssertEqual(report.line, "3 chapters written (AV 3, Nero 3)")
+    }
+
+    func testExportServiceWritesTheM4B() async throws {
+        let source = try await silentM4A(seconds: 1.6)
+        let duration = try await AVURLAsset(url: source).load(.duration).seconds
+        let track = SourceTrack(
+            path: source.path,
+            duration: duration,
+            originalTitle: "Only",
+            codec: "aac",
+            channels: 1,
+            sampleRate: 44100
+        )
+        var project = BookProject(title: "Export Probe")
+        project.outputPreset = .keepSource
+        project.tracks = [track]
+        project.chapters = [Chapter(title: "Only", trackIDs: [track.id])]
+        project.recomputeTimeline()
+        let destination = scratch.appendingPathComponent("exported.m4b")
+        let report = try await ExportService.export(project: project, destination: destination) { _ in }
+        let written = try Data(contentsOf: destination)
+        XCTAssertGreaterThan(written.count, 1000)
+        XCTAssertEqual(report.urls, [destination])
+        XCTAssertTrue(report.lines.joined(separator: " ").contains("chapters written"))
     }
 
     func testOneChapterWritesOneChapter() async throws {

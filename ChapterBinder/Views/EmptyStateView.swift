@@ -20,15 +20,6 @@ struct EmptyStateView: View {
             }
 
             HStack(alignment: .top, spacing: 16) {
-                #if !APP_STORE
-                PathCard(
-                    icon: "opticaldisc",
-                    title: "Rip a CD",
-                    detail: "Insert disc 1 of a multi-disc book. USB SuperDrive is fine — modern Macs have no built-in drive."
-                ) {
-                    model.newFromCD()
-                }
-                #endif
                 PathCard(
                     icon: "folder.fill.badge.plus",
                     title: "Drop a folder",

@@ -84,6 +84,11 @@ nonisolated enum NativeExportService {
         try await encode(slices, project: project, to: destination, onProgress: onProgress)
     }
 
+    private static func reportAudio(_ fraction: Double, message: String, onProgress: @escaping @Sendable (ExportProgress) -> Void) {
+        let mapped = 0.15 + min(max(fraction, 0), 1) * 0.67
+        onProgress(ExportProgress(fraction: mapped, message: message))
+    }
+
     private static func slicePlans(_ project: BookProject) -> [SlicePlan] {
         ExportPlanner.slices(for: project).compactMap { slice in
             guard let track = project.track(id: slice.trackID) else { return nil }
@@ -100,10 +105,12 @@ nonisolated enum NativeExportService {
         to destination: URL,
         onProgress: @escaping @Sendable (ExportProgress) -> Void
     ) async throws {
-        onProgress(ExportProgress(fraction: 0.2, message: "Copying AAC packets"))
-        let pump = PacketPump(slices: slices, destination: destination, encode: nil)
+        onProgress(ExportProgress(fraction: 0.15, message: "Copying AAC"))
+        let pump = PacketPump(slices: slices, destination: destination, encode: nil) { fraction in
+            reportAudio(fraction, message: "Copying AAC", onProgress: onProgress)
+        }
         try await pump.run()
-        onProgress(ExportProgress(fraction: 0.8, message: "Audio copied"))
+        onProgress(ExportProgress(fraction: 0.82, message: "Audio copied"))
     }
 
     private static func encode(
@@ -125,7 +132,9 @@ nonisolated enum NativeExportService {
             slices: slices,
             destination: destination,
             encode: EncodeSpec(bitrate: bitrate, channels: channels, sampleRate: rate)
-        )
+        ) { fraction in
+            reportAudio(fraction, message: "Encoding AAC-LC", onProgress: onProgress)
+        }
         do {
             try await pump.run()
         } catch let error as ExportNeedsHelper {
@@ -137,7 +146,7 @@ nonisolated enum NativeExportService {
             }
             throw error
         }
-        onProgress(ExportProgress(fraction: 0.8, message: "Encoded AAC-LC"))
+        onProgress(ExportProgress(fraction: 0.82, message: "Encoded AAC-LC"))
     }
 }
 
@@ -159,17 +168,37 @@ private nonisolated final class PacketPump: @unchecked Sendable {
     let slices: [SlicePlan]
     let destination: URL
     let encode: EncodeSpec?
+    private let onFraction: @Sendable (Double) -> Void
     private let queue = DispatchQueue(label: "com.benmonroe.ChapterBinder.export")
     private let lock = NSLock()
     private var writer: AVAssetWriter?
     private var pending: CheckedContinuation<Void, Error>?
     private var resumed = false
     private var wrote = false
+    private var lastReport = 0.0
 
-    init(slices: [SlicePlan], destination: URL, encode: EncodeSpec?) {
+    init(
+        slices: [SlicePlan],
+        destination: URL,
+        encode: EncodeSpec?,
+        onFraction: @escaping @Sendable (Double) -> Void
+    ) {
         self.slices = slices
         self.destination = destination
         self.encode = encode
+        self.onFraction = onFraction
+    }
+
+    private var totalSeconds: Double {
+        slices.reduce(0) { $0 + max(0, $1.end - $1.start) }
+    }
+
+    private func reportFraction(_ fraction: Double, force: Bool = false) {
+        let clamped = min(max(fraction.isFinite ? fraction : 0, 0), 1)
+        let now = CFAbsoluteTimeGetCurrent()
+        if !force, clamped < 0.999, now - lastReport < 0.25 { return }
+        lastReport = now
+        onFraction(clamped)
     }
 
     func run() async throws {
@@ -277,6 +306,7 @@ private nonisolated final class PacketPump: @unchecked Sendable {
                         return
                     }
                     self.wrote = true
+                    self.reportFraction(Self.fraction(of: retimed, total: self.totalSeconds))
                 } else {
                     if let duration = reader?.timeRange.duration {
                         cursor = CMTimeAdd(cursor, duration)
@@ -285,6 +315,7 @@ private nonisolated final class PacketPump: @unchecked Sendable {
                     output = nil
                     if !openSlice() {
                         input.markAsFinished()
+                        self.reportFraction(1, force: true)
                         if !self.wrote {
                             writer.cancelWriting()
                             self.finish(ExportNeedsHelper.unreadable("The AAC copy produced no samples."))
@@ -385,8 +416,10 @@ private nonisolated final class PacketPump: @unchecked Sendable {
                         return
                     }
                     self.wrote = true
+                    self.reportFraction(Self.fraction(of: sample, total: self.totalSeconds))
                 } else {
                     input.markAsFinished()
+                    self.reportFraction(1, force: true)
                     if reader.status == .failed {
                         writer.cancelWriting()
                         self.finish(ExportNeedsHelper.unreadable(reader.error?.localizedDescription ?? "Decode failed."))
@@ -423,6 +456,13 @@ private nonisolated final class PacketPump: @unchecked Sendable {
         } else {
             continuation.resume()
         }
+    }
+
+    private static func fraction(of sample: CMSampleBuffer, total: Double) -> Double {
+        guard total > 0 else { return 0 }
+        let seconds = CMSampleBufferGetPresentationTimeStamp(sample).seconds
+        guard seconds.isFinite else { return 0 }
+        return seconds / total
     }
 
     private static func retime(_ sample: CMSampleBuffer, origin: CMTime, cursor: CMTime) -> CMSampleBuffer? {

@@ -7,20 +7,23 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             SidebarView()
+        } content: {
+            centerPane
+                .navigationSplitViewColumnWidth(min: 520, ideal: 720)
+                .navigationTitle(model.selectedProject?.displayTitle ?? "ChapterBinder")
+                .toolbar { toolbar }
         } detail: {
-            HSplitView {
-                centerPane
-                    .frame(minWidth: 520)
+            Group {
                 if let binding = model.binding() {
                     InspectorView(project: binding)
-                        .frame(minWidth: 280, idealWidth: 320, maxWidth: 400)
                 } else {
-                    EmptyStateView()
+                    Text("Select or create a book to edit its metadata.")
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
+            .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 400)
         }
-        .navigationTitle(model.selectedProject?.displayTitle ?? "ChapterBinder")
-        .toolbar { toolbar }
         .onDrop(of: [.fileURL], isTargeted: nil, perform: handleDrop)
         .onAppear {
             if let project = model.selectedProject {
@@ -59,7 +62,9 @@ struct ContentView: View {
 
     private var centerPane: some View {
         VStack(spacing: 0) {
-            CDBannerView()
+            if let job = model.queue.trackedJob {
+                ExportActivityBar(job: job)
+            }
             if !model.relinkPaths.isEmpty {
                 HStack(spacing: 10) {
                     Image(systemName: "link.badge.plus")
@@ -97,7 +102,7 @@ struct ContentView: View {
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
-        ToolbarItemGroup(placement: .primaryAction) {
+        ToolbarItem(id: "add-files", placement: .primaryAction) {
             Button {
                 model.addFilesToCurrent()
             } label: {
@@ -105,20 +110,23 @@ struct ContentView: View {
             }
             .help("Add files to the current book (⌘I)")
             .disabled(model.selectedProject == nil)
-
+        }
+        ToolbarItem(id: "merge", placement: .primaryAction) {
             Button {
                 model.mergeSelection()
             } label: {
                 Label("Merge", systemImage: "square.stack.3d.up")
             }
             .help("Merge selection into one chapter (M)")
-
+        }
+        ToolbarItem(id: "split", placement: .primaryAction) {
             Button {
                 model.splitSelection()
             } label: {
                 Label("Split", systemImage: "square.split.2x1")
             }
-
+        }
+        ToolbarItem(id: "export", placement: .primaryAction) {
             Button {
                 model.enqueueExport()
             } label: {
@@ -171,6 +179,108 @@ struct ContentView: View {
             }
             return .ignored
         }
+    }
+}
+
+private struct ExportActivityBar: View {
+    @Environment(AppModel.self) private var model
+    var job: ExportJob
+
+    private var percent: Int { Int((job.progress * 100).rounded()) }
+
+    var body: some View {
+        if job.hideBanner {
+            EmptyView()
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    statusIcon
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(headline)
+                            .font(.callout)
+                            .lineLimit(1)
+                        if !detail.isEmpty {
+                            Text(detail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                    actions
+                }
+                if job.state == .running || job.state == .queued {
+                    ProgressView(value: min(max(job.progress, 0), 1))
+                        .progressViewStyle(.linear)
+                        .accessibilityLabel("Export progress")
+                        .accessibilityValue("\(percent) percent")
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(.quaternary.opacity(0.45))
+        }
+    }
+
+    @ViewBuilder
+    private var statusIcon: some View {
+        switch job.state {
+        case .succeeded:
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+        case .failed:
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+        case .cancelled:
+            Image(systemName: "xmark.circle")
+                .foregroundStyle(.secondary)
+        case .running, .queued, .paused:
+            if job.progress > 0.001 {
+                Text("\(percent)%")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: 36, alignment: .trailing)
+            } else {
+                ProgressView()
+                    .controlSize(.small)
+            }
+        }
+    }
+
+    private var headline: String {
+        switch job.state {
+        case .queued: "Export queued"
+        case .running: "Exporting \(job.title)"
+        case .succeeded: "Exported \(job.title)"
+        case .failed: "Export failed"
+        case .cancelled: "Export cancelled"
+        case .paused: "Export paused"
+        }
+    }
+
+    private var detail: String {
+        if job.state == .failed, let error = job.error { return error }
+        var parts: [String] = []
+        if !job.fileName.isEmpty { parts.append(job.fileName) }
+        if !job.message.isEmpty { parts.append(job.message) }
+        return parts.joined(separator: " · ")
+    }
+
+    @ViewBuilder
+    private var actions: some View {
+        HStack(spacing: 8) {
+            if job.state == .running || job.state == .queued {
+                Button("Cancel") { model.queue.cancel(job.id) }
+            } else {
+                if let url = job.outputURLs.first {
+                    Button("Reveal") { model.reveal(url: url) }
+                    Button("Open") { model.openFinished(url: url) }
+                }
+                Button("Dismiss") { model.queue.dismissBanner(job.id) }
+            }
+        }
+        .buttonStyle(.borderless)
+        .font(.callout)
     }
 }
 
